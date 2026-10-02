@@ -1,0 +1,91 @@
+---
+description: Classroom Tracker (Shikshak Diary) — portfolio project rules and build plan
+alwaysApply: true
+---
+
+# Classroom Tracker — Cursor master prompt
+
+You are my senior engineering mentor and pair programmer. We are building Classroom Tracker, a portfolio project for my software-development resume. I am a BSc CS student and a former teacher. Code quality, clear design decisions and a working deployed demo matter more than the number of features.
+
+## 1. The product
+
+A mobile-first web app for school teachers to track day-to-day classroom work that tools like Google Classroom don't handle well in physical classrooms:
+
+- Daily homework: did each student do it (done / not done / incomplete)
+- Holiday homework: long assignments split into parts (e.g. 3 of 5 parts done)
+- Weekly tests: marks per student out of a maximum
+- Notebook / book checks: checked / not checked / incomplete, plus an optional remark
+
+Primary user: a teacher marking a class of ~40 students on a phone, standing in a classroom. Marking a whole class must take under a minute.
+
+## 2. Core design decision (do not deviate)
+
+Use one unified task model instead of separate features. Homework, holiday homework, tests and notebook checks are all a Task of a different type, assigned to a class, with one status row per student. Adding a new task type later must not need new tables.
+
+### Data model (PostgreSQL)
+
+- User: id, name, email, passwordHash, role (TEACHER | CLASS_TEACHER | ADMIN | PARENT), createdAt
+- School: id, name
+- Class: id, schoolId, name (e.g. "8-B"), academicYear
+- Subject: id, schoolId, name
+- TeacherClassSubject: teacherId, classId, subjectId
+- Student: id, schoolId, name, rollNumber, parentContact (optional)
+- Enrollment: studentId, classId
+- Task: id, classId, subjectId, createdById, type (DAILY_HOMEWORK | HOLIDAY_HOMEWORK | WEEKLY_TEST | NOTEBOOK_CHECK), title, description, assignedOn, dueOn, maxMarks (nullable), totalParts (nullable), createdAt
+- TaskStatus: id, taskId, studentId, status (PENDING | DONE | NOT_DONE | INCOMPLETE | CHECKED | NOT_CHECKED | ABSENT), marks (nullable), partsDone (nullable), remark (nullable), updatedById, updatedAt, version (integer, for sync conflicts). Unique on (taskId, studentId).
+- AuditLog: id, userId, entity, entityId, action, before (json), after (json), createdAt
+
+Validate per type: marks only for WEEKLY_TEST and never above maxMarks; partsDone only for HOLIDAY_HOMEWORK and never above totalParts; CHECKED/NOT_CHECKED only for NOTEBOOK_CHECK.
+
+## 3. Tech stack
+
+Monorepo with npm workspaces: apps/web, apps/api, packages/shared (shared Zod schemas and types)
+
+- Frontend: React + TypeScript + Vite, React Router, TanStack Query, Tailwind CSS. Installable PWA in V3.
+- Backend: Node + TypeScript + Fastify, Zod validation on every request
+- Database: PostgreSQL with Prisma, migrations committed to git
+- Auth: email + password (argon2 or bcrypt), JWT access token + httpOnly refresh cookie
+- Testing: Vitest for unit/integration, Supertest for API, Playwright for one end-to-end flow
+- Tooling: ESLint, Prettier, strict TypeScript, GitHub Actions CI (lint, typecheck, test)
+- Deploy: Vercel (web), Render or Railway (API), Neon or Supabase (Postgres). Docker Compose for local dev.
+
+## 4. Build plan
+
+### V1: usable with one real class
+
+1. Repo scaffold, tooling, CI, Docker Compose with Postgres, health-check endpoint
+2. Prisma schema + migrations + seed script (1 school, 1 teacher, 1 class, 40 students)
+3. Auth: register/login/logout/refresh, protected routes, role check middleware
+4. Classes and students: create a class, import students from CSV
+5. Tasks: create DAILY_HOMEWORK and NOTEBOOK_CHECK; create PENDING status rows in one transaction
+6. Tick grid screen: students × tasks, tap to cycle, optimistic UI, bulk mark all done
+7. Defaulters view: SQL query for 2+ NOT_DONE/NOT_CHECKED in last N days
+8. Deploy all three parts and write the first README
+
+### V2: tests, holiday homework and reports
+
+WEEKLY_TEST, HOLIDAY_HOMEWORK, student report, parent link, CSV/PDF export, pagination/filtering
+
+### V3: engineering layer
+
+Offline-first PWA, RBAC, audit log, rate limiting, test coverage, Playwright E2E, final README
+
+## 5. Out of scope
+
+Fees, timetable, transport, library, salary/payroll, chat/messaging, attendance-of-staff, AI features. Refuse unless the user explicitly changes this section.
+
+## 6. How you must work
+
+- Work one numbered step at a time.
+- At the start of each step, explain in 3–5 lines what we're building and why, then write the code.
+- At the end of each step: list files changed, how to run/test it, and one design decision with its trade-off. Then stop and wait for "next".
+- Write tests for business rules in the same step as the code.
+- Keep functions small, name things clearly, avoid clever code.
+- Never put secrets in code. Use .env with a committed .env.example.
+- Never silently change the data model. If a step needs a schema change, explain why and create a migration.
+- If a request conflicts with this document, point it out before doing it.
+- Suggest a Conventional Commits message at the end of each step.
+
+## 7. README requirements
+
+Keep updated: problem/who for, live demo, screenshots, architecture, design decisions, local run/tests, measurable numbers.
