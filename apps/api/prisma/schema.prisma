@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TEACHER
+  CLASS_TEACHER
+  ADMIN
+  PARENT
+}
+
+enum TaskType {
+  DAILY_HOMEWORK
+  HOLIDAY_HOMEWORK
+  WEEKLY_TEST
+  NOTEBOOK_CHECK
+}
+
+enum StatusValue {
+  PENDING
+  DONE
+  NOT_DONE
+  INCOMPLETE
+  CHECKED
+  NOT_CHECKED
+  ABSENT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+
+  createdTasks       Task[]              @relation("TaskCreatedBy")
+  updatedStatuses    TaskStatus[]        @relation("StatusUpdatedBy")
+  teacherAssignments TeacherClassSubject[]
+  auditLogs          AuditLog[]
+}
+
+model School {
+  id   String @id @default(cuid())
+  name String
+
+  classes  Class[]
+  subjects Subject[]
+  students Student[]
+}
+
+model Class {
+  id           String @id @default(cuid())
+  schoolId     String
+  name         String
+  academicYear String
+
+  school               School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  enrollments          Enrollment[]
+  tasks                Task[]
+  teacherAssignments   TeacherClassSubject[]
+
+  @@unique([schoolId, name, academicYear])
+  @@index([schoolId])
+}
+
+model Subject {
+  id       String @id @default(cuid())
+  schoolId String
+  name     String
+
+  school             School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  tasks              Task[]
+  teacherAssignments TeacherClassSubject[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+model TeacherClassSubject {
+  teacherId String
+  classId   String
+  subjectId String
+
+  teacher User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, classId, subjectId])
+  @@index([classId])
+  @@index([subjectId])
+}
+
+model Student {
+  id            String  @id @default(cuid())
+  schoolId      String
+  name          String
+  rollNumber    Int
+  parentContact String?
+
+  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  enrollments Enrollment[]
+  statuses    TaskStatus[]
+
+  @@unique([schoolId, rollNumber])
+  @@index([schoolId])
+}
+
+model Enrollment {
+  studentId String
+  classId   String
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, classId])
+  @@index([classId])
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  classId     String
+  subjectId   String
+  createdById String
+  type        TaskType
+  title       String
+  description String   @default("")
+  assignedOn  DateTime
+  dueOn       DateTime
+  maxMarks    Int?
+  totalParts  Int?
+  createdAt   DateTime @default(now())
+
+  class     Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject   Subject      @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  createdBy User         @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  statuses  TaskStatus[]
+
+  @@index([classId, assignedOn])
+  @@index([subjectId])
+  @@index([createdById])
+}
+
+model TaskStatus {
+  id          String      @id @default(cuid())
+  taskId      String
+  studentId   String
+  status      StatusValue @default(PENDING)
+  marks       Int?
+  partsDone   Int?
+  remark      String?
+  updatedById String?
+  updatedAt   DateTime    @updatedAt
+  version     Int         @default(1)
+
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  updatedBy User?   @relation("StatusUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([taskId, studentId])
+  @@index([studentId])
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  entity    String
+  entityId  String
+  action    String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([entity, entityId])
+  @@index([userId, createdAt])
+}

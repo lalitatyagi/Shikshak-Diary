@@ -8,28 +8,37 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**Step 1 complete:** monorepo scaffold, tooling, CI, Docker Compose (Postgres),
-API health endpoint.
+**Step 2 complete:** Prisma schema (unified task model), committed migration, and
+seed script (1 school, 1 teacher, 1 class, 40 students).
 
 Live demo: _not deployed yet_  
-Demo teacher login: _coming after auth (Step 3)_
+Demo teacher login (after `npm run db:seed`):
+
+- Email: `teacher@demo.local`
+- Password: `Teacher123!`
+
+Auth routes arrive in Step 3 — the seeded user is ready for that.
 
 ## Architecture (current)
 
 ```
-apps/web  (React + Vite)  --HTTP-->  apps/api  (Fastify)  -- later -->  Postgres
-packages/shared  (Zod schemas / types used by web + api)
+apps/web  (React + Vite)
+    |
+    v
+apps/api  (Fastify + Prisma)
+    |
+    v
+PostgreSQL  (Docker Compose)  — School / Class / Student / Task / TaskStatus …
+packages/shared  (Zod schemas + enums shared by web + api)
 ```
-
-Local Postgres runs via Docker Compose. Prisma and the full data model arrive in
-Step 2.
 
 ## Design decisions so far
 
 | Decision | Why | Trade-off |
 | --- | --- | --- |
 | npm workspaces monorepo | Share Zod types between web and API; one CI pipeline | Slightly heavier than two separate repos |
-| Unified task model (planned) | One `Task` + `TaskStatus` for all classroom activities | Type-specific validation must live in code, not separate tables |
+| Unified task model | One `Task` + `TaskStatus` for homework, tests, notebook checks | Type-specific validation lives in application code, not separate tables |
+| Committed Prisma migrations | Schema history is reviewable in git; deploys use `migrate deploy` | Requires discipline — never edit applied migrations |
 
 ## Prerequisites
 
@@ -42,14 +51,16 @@ Step 2.
 # 1. Install dependencies
 npm install
 
-# 2. Env file
+# 2. Env file (root + copy for Prisma CLI in apps/api)
 cp .env.example .env
+cp .env apps/api/.env
 
 # 3. Start Postgres
 npm run db:up
 
-# 4. Build shared package (needed before API/web in some workflows)
-npm run build -w @classroom-tracker/shared
+# 4. Apply migrations + seed demo data
+npm run db:migrate
+npm run db:seed
 
 # 5. Run API and web (separate terminals)
 npm run dev:api
@@ -69,6 +80,11 @@ npm run dev:web
 | `npm run typecheck` | TypeScript `--noEmit` in each workspace |
 | `npm test` | Vitest in each workspace |
 | `npm run db:up` / `db:down` | Start/stop Postgres via Docker Compose |
+| `npm run db:generate` | Generate Prisma Client |
+| `npm run db:migrate` | Apply committed migrations (`migrate deploy`) |
+| `npm run db:migrate:dev` | Create/apply migrations during development |
+| `npm run db:seed` | Seed 1 school, teacher, class, 40 students |
+| `npm run db:reset` | Reset DB, re-apply migrations, seed |
 
 ## Out of scope
 
