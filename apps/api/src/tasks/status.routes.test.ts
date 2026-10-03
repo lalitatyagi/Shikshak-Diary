@@ -264,6 +264,35 @@ describe("tick grid status routes", () => {
     expect([403, 404]).toContain(markAll.statusCode);
   });
 
+  it("returns 409 when two updates race on the same version", async () => {
+    const grid = (
+      await app.inject({
+        method: "GET",
+        url: `/classes/${classId}/grid`,
+        headers: { authorization: `Bearer ${accessToken}` },
+      })
+    ).json() as { statuses: Array<{ id: string; version: number }> };
+    const cell = grid.statuses[0]!;
+
+    const [first, second] = await Promise.all([
+      app.inject({
+        method: "PUT",
+        url: `/task-statuses/${cell.id}`,
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { status: "DONE", version: cell.version },
+      }),
+      app.inject({
+        method: "PUT",
+        url: `/task-statuses/${cell.id}`,
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { status: "NOT_DONE", version: cell.version },
+      }),
+    ]);
+
+    const codes = [first.statusCode, second.statusCode].sort();
+    expect(codes).toEqual([200, 409]);
+  });
+
   it("lets an admin open the grid when the class has no teacher assignment", async () => {
     await prisma.teacherClassSubject.deleteMany({ where: { classId } });
 

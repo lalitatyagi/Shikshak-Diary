@@ -380,6 +380,31 @@ describe("auth routes", () => {
     expect(me.statusCode).toBe(401);
   });
 
+  it("rejects a refresh token after the user is deleted", async () => {
+    const email = uniqueEmail("deleted-refresh");
+    createdEmails.push(email);
+
+    const register = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: {
+        name: "Refresh Gone",
+        email,
+        password: "Password123!",
+      },
+    });
+    const cookie = cookieHeader(register.headers["set-cookie"]);
+    await prisma.user.delete({ where: { email: email.toLowerCase() } });
+    createdEmails.pop();
+
+    const refresh = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      headers: { cookie },
+    });
+    expect(refresh.statusCode).toBe(401);
+  });
+
   it("returns 403 when role is not allowed", async () => {
     const email = uniqueEmail("parent");
     createdEmails.push(email);

@@ -104,4 +104,57 @@ describe("TickGridPage status errors", () => {
       expect(gridCalls.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  it("sends the second tap with the version returned by the first save", async () => {
+    let releaseFirst: (value: unknown) => void = () => undefined;
+    const firstSave = new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+    const putBodies: Array<{ status: string; version: number }> = [];
+
+    vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+      if (String(path).includes("/grid")) {
+        return grid;
+      }
+      const body = JSON.parse(String(init?.body)) as {
+        status: string;
+        version: number;
+      };
+      putBodies.push(body);
+      if (putBodies.length === 1) {
+        return firstSave;
+      }
+      return {
+        ...grid.statuses[0],
+        status: body.status,
+        version: body.version + 1,
+      };
+    });
+
+    renderGrid();
+    const cell = await screen.findByRole("button", {
+      name: "Aarav Sharma Exercise",
+    });
+    cell.click();
+    await waitFor(() => {
+      expect(cell.textContent).toMatch(/Done/);
+    });
+    cell.click();
+
+    await waitFor(() => {
+      expect(putBodies).toHaveLength(1);
+    });
+    expect(putBodies[0]).toMatchObject({ status: "DONE", version: 1 });
+
+    releaseFirst({
+      ...grid.statuses[0],
+      status: "DONE",
+      version: 2,
+    });
+
+    await waitFor(() => {
+      expect(putBodies).toHaveLength(2);
+    });
+    expect(putBodies[1]).toMatchObject({ status: "NOT_DONE", version: 2 });
+  });
 });

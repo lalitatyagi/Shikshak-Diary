@@ -94,6 +94,67 @@ describe("JWT tokens", () => {
     await expect(verifyAccessToken(token)).rejects.toThrow();
   });
 
+  it("rejects an expired access token", async () => {
+    const secret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET);
+    const token = await new SignJWT({
+      email: "teacher@demo.local",
+      role: "TEACHER",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject("user_1")
+      .setIssuer("classroom-tracker")
+      .setAudience("classroom-tracker-access")
+      .setIssuedAt(Math.floor(Date.now() / 1000) - 120)
+      .setExpirationTime(Math.floor(Date.now() / 1000) - 60)
+      .sign(secret);
+
+    await expect(verifyAccessToken(token)).rejects.toThrow();
+  });
+
+  it("rejects a tampered access token", async () => {
+    const token = await signAccessToken({
+      sub: "user_1",
+      email: "teacher@demo.local",
+      role: "TEACHER",
+    });
+    const flipped = token.endsWith("a")
+      ? `${token.slice(0, -1)}b`
+      : `${token.slice(0, -1)}a`;
+    await expect(verifyAccessToken(flipped)).rejects.toThrow();
+  });
+
+  it("rejects an access token signed with the wrong secret", async () => {
+    const token = await new SignJWT({
+      email: "teacher@demo.local",
+      role: "TEACHER",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject("user_1")
+      .setIssuer("classroom-tracker")
+      .setAudience("classroom-tracker-access")
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(new TextEncoder().encode("not-the-real-secret-but-long-enough"));
+
+    await expect(verifyAccessToken(token)).rejects.toThrow();
+  });
+
+  it("rejects an unsigned alg none token", async () => {
+    const header = Buffer.from(
+      JSON.stringify({ alg: "none", typ: "JWT" }),
+    ).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: "user_1",
+        email: "teacher@demo.local",
+        role: "TEACHER",
+        iss: "classroom-tracker",
+        aud: "classroom-tracker-access",
+      }),
+    ).toString("base64url");
+    await expect(verifyAccessToken(`${header}.${payload}.`)).rejects.toThrow();
+  });
+
   it("rejects an access token signed with a different audience", async () => {
     const token = await new SignJWT({
       email: "teacher@demo.local",

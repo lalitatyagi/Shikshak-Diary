@@ -107,6 +107,19 @@ describe("parseStudentCsv", () => {
     expect(result.errors[0]?.message).toMatch(/200/);
   });
 
+  it("keeps a newline that sits inside a quoted name", () => {
+    const result = parseStudentCsv('rollNumber,name\n1,"Aarav\nSharma"\n');
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toEqual([
+      {
+        row: 2,
+        rollNumber: 1,
+        name: "Aarav\nSharma",
+        parentContact: null,
+      },
+    ]);
+  });
+
   it("rejects scientific notation such as 1e2", () => {
     const result = parseStudentCsv("rollNumber,name\n1e2,Aarav\n");
     expect(result.rows).toEqual([]);
