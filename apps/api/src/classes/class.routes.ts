@@ -1,8 +1,10 @@
 import {
   classSchema,
   createClassBodySchema,
+  createSchoolBodySchema,
   csvImportBodySchema,
   csvImportResultSchema,
+  inviteSchoolMemberBodySchema,
   schoolSchema,
   studentSchema,
 } from "@classroom-tracker/shared";
@@ -11,7 +13,9 @@ import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import { sendHttpError } from "../errors.js";
 import {
   createClassForTeacher,
+  createSchool,
   importStudentsFromCsv,
+  inviteSchoolMember,
   listClassesForUser,
   listSchoolsForUser,
   listStudentsForClass,
@@ -20,6 +24,45 @@ import {
 const teacherRoles = ["TEACHER", "CLASS_TEACHER", "ADMIN"] as const;
 
 export async function classRoutes(app: FastifyInstance): Promise<void> {
+  app.post(
+    "/schools",
+    { preHandler: [requireAuth, requireRole("ADMIN")] },
+    async (request, reply) => {
+      const parsed = createSchoolBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid school payload",
+          details: parsed.error.flatten(),
+        });
+      }
+
+      const school = await createSchool(parsed.data.name);
+      return reply.status(201).send(schoolSchema.parse(school));
+    },
+  );
+
+  app.post(
+    "/schools/:schoolId/members",
+    { preHandler: [requireAuth, requireRole("ADMIN")] },
+    async (request, reply) => {
+      const { schoolId } = request.params as { schoolId: string };
+      const parsed = inviteSchoolMemberBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid invite payload",
+          details: parsed.error.flatten(),
+        });
+      }
+
+      try {
+        const member = await inviteSchoolMember(schoolId, parsed.data.email);
+        return reply.status(201).send(member);
+      } catch (error) {
+        return sendHttpError(reply, error);
+      }
+    },
+  );
+
   app.get(
     "/schools",
     { preHandler: [requireAuth, requireRole(...teacherRoles)] },

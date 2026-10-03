@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { grantSchoolMembership } from "../test/school-member.js";
 
 loadEnv();
 
@@ -15,6 +16,7 @@ describe("class routes", () => {
   let schoolId: string;
   let accessToken: string;
   let otherToken: string;
+  let teacherEmail: string;
   const emails: string[] = [];
   const classIds: string[] = [];
 
@@ -27,7 +29,7 @@ describe("class routes", () => {
     });
     schoolId = school.id;
 
-    const teacherEmail = uniqueEmail("class-teacher");
+    teacherEmail = uniqueEmail("class-teacher");
     const otherEmail = uniqueEmail("other-teacher");
     emails.push(teacherEmail, otherEmail);
 
@@ -52,6 +54,8 @@ describe("class routes", () => {
       },
     });
     otherToken = (otherRes.json() as { accessToken: string }).accessToken;
+
+    await grantSchoolMembership(teacherEmail, schoolId);
   });
 
   afterAll(async () => {
@@ -194,6 +198,111 @@ describe("class routes", () => {
       },
     });
     expect([403, 404]).toContain(importStudents.statusCode);
+  });
+
+  it("does not let an uninvited teacher see or create in another school", async () => {
+    const schools = await app.inject({
+      method: "GET",
+      url: "/schools",
+      headers: { authorization: `Bearer ${otherToken}` },
+    });
+    expect(schools.statusCode).toBe(200);
+    expect(
+      (schools.json() as Array<{ id: string }>).some((s) => s.id === schoolId),
+    ).toBe(false);
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/classes",
+      headers: { authorization: `Bearer ${otherToken}` },
+      payload: {
+        schoolId,
+        name: `Intruder-${Date.now().toString(36)}`,
+        academicYear: "2025-26",
+      },
+    });
+    expect(created.statusCode).toBe(403);
+    if (created.statusCode === 201) {
+      classIds.push((created.json() as { id: string }).id);
+    }
+  });
+
+  it("does not overwrite a student enrolled in a class the importer cannot access", async () => {
+    const ownerClass = await app.inject({
+      method: "POST",
+      url: "/classes",
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        schoolId,
+        name: `Own-${Date.now().toString(36)}`,
+        academicYear: "2025-26",
+      },
+    });
+    expect(ownerClass.statusCode).toBe(201);
+    const ownerClassId = (ownerClass.json() as { id: string }).id;
+    classIds.push(ownerClassId);
+
+    const firstImport = await app.inject({
+      method: "POST",
+      url: `/classes/${ownerClassId}/students/import`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { csv: "rollNumber,name\n41,Aarav Sharma\n" },
+    });
+    expect(firstImport.statusCode).toBe(200);
+    expect((firstImport.json() as { imported: number }).imported).toBe(1);
+
+    const attackerEmail = uniqueEmail("invited-attacker");
+    emails.push(attackerEmail);
+    const attackerRegister = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: {
+        name: "Invited Attacker",
+        email: attackerEmail,
+        password: "Password123!",
+      },
+    });
+    const attackerToken = (attackerRegister.json() as { accessToken: string })
+      .accessToken;
+    await grantSchoolMembership(attackerEmail, schoolId);
+
+    const attackerClass = await app.inject({
+      method: "POST",
+      url: "/classes",
+      headers: { authorization: `Bearer ${attackerToken}` },
+      payload: {
+        schoolId,
+        name: `Atk-${Date.now().toString(36)}`,
+        academicYear: "2025-26",
+      },
+    });
+    expect(attackerClass.statusCode).toBe(201);
+    const attackerClassId = (attackerClass.json() as { id: string }).id;
+    classIds.push(attackerClassId);
+
+    const secondImport = await app.inject({
+      method: "POST",
+      url: `/classes/${attackerClassId}/students/import`,
+      headers: { authorization: `Bearer ${attackerToken}` },
+      payload: { csv: "rollNumber,name,parentContact\n41,Hijacked,999\n" },
+    });
+    expect(secondImport.statusCode).toBe(200);
+    const result = secondImport.json() as {
+      imported: number;
+      errors: Array<{ message: string }>;
+      students: Array<{ name: string }>;
+    };
+    expect(result.imported).toBe(0);
+    expect(result.students).toEqual([]);
+    expect(result.errors.some((error) => /roll/i.test(error.message))).toBe(
+      true,
+    );
+
+    const stored = await prisma.student.findFirstOrThrow({
+      where: { schoolId, rollNumber: 41 },
+    });
+    expect(stored.name).toBe("Aarav Sharma");
+    expect(stored.parentContact).toBeNull();
   });
 
   it("rejects creating a class in a school the teacher does not belong to", async () => {

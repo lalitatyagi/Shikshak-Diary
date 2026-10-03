@@ -18,6 +18,8 @@ export {
   type AuthTokens,
 } from "./auth.js";
 export {
+  createSchoolBodySchema,
+  inviteSchoolMemberBodySchema,
   createClassBodySchema,
   schoolSchema,
   classSchema,
@@ -25,6 +27,8 @@ export {
   csvImportBodySchema,
   csvImportResultSchema,
   csvRowErrorSchema,
+  type CreateSchoolBody,
+  type InviteSchoolMemberBody,
   type CreateClassBody,
   type SchoolDto,
   type ClassDto,

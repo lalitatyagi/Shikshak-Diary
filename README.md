@@ -31,13 +31,16 @@ Demo teacher login (after `npm run db:seed`):
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/schools` | List schools |
+| GET | `/schools` | Schools the caller belongs to (ADMIN: all) |
+| POST | `/schools` | ADMIN creates a school |
+| POST | `/schools/:schoolId/members` | ADMIN invites a registered teacher by email |
 | GET | `/classes` | Classes assigned to the teacher |
-| POST | `/classes` | Create class + subject link for the teacher |
+| POST | `/classes` | Create a class in a school the teacher belongs to |
 | GET | `/classes/:classId/students` | Enrolled students (roll order) |
 | POST | `/classes/:classId/students/import` | CSV import; returns per-row errors |
 
 CSV columns: `rollNumber`, `name`, and optional `parentContact`.
+A roll number that already belongs to a student in a class you cannot access is a per-row error. The import does not rename that student or enroll them.
 
 Example body:
 
@@ -97,6 +100,7 @@ packages/shared  (Zod schemas + enums shared by web + api)
 | npm workspaces monorepo | Share Zod types between web and API; one CI pipeline | Slightly heavier than two separate repos |
 | Unified task model | One `Task` + `TaskStatus` for all activity types | Type rules live in application code |
 | Short-lived access JWT + httpOnly refresh cookie | Easy clients + refresh off-limits to JS | Logout is cookie-clear only for now |
+| School membership, not open bootstrap | An admin creates the school and invites teachers. A new account with no membership sees no schools and cannot create a class in someone else's. CSV import will not update a student enrolled in a class the caller cannot access; that roll is a per-row error | A teacher cannot self-join a school. Someone with the ADMIN role has to invite them |
 | Partial CSV import with per-row errors | Teacher can fix bad rows without redoing the whole file | Class may be half-imported until they re-run |
 | Task + statuses created in one transaction | No task without a full PENDING grid for the class | Large classes = bigger write; still fine for ~40 students |
 | Optimistic status cycle + version check | Feels instant on a phone; 409 if another update won | Needs refresh/invalidate after conflicts |

@@ -4,6 +4,7 @@ import { toKolkataCalendarDate } from "@classroom-tracker/shared";
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { grantSchoolMembership } from "../test/school-member.js";
 
 loadEnv();
 
@@ -56,6 +57,8 @@ describe("tick grid status routes", () => {
         },
       })
     ).json().accessToken as string;
+
+    await grantSchoolMembership(email, schoolId);
 
     classId = (
       await app.inject({

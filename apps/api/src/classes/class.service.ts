@@ -44,10 +44,9 @@ function toStudentDto(student: {
 }
 
 /**
- * Schools the teacher can see.
- * - ADMIN: all schools
- * - Teacher with assignments: only schools they belong to (via TeacherClassSubject)
- * - Teacher with no assignments yet: all schools (bootstrap so they can join one)
+ * Schools the caller can see.
+ * - ADMIN: every school
+ * - Everyone else: only schools an admin has added them to (`SchoolMember`)
  */
 export async function listSchoolsForUser(
   userId: string,
@@ -58,16 +57,13 @@ export async function listSchoolsForUser(
     return schools.map((school) => schoolSchema.parse(school));
   }
 
-  const memberships = await prisma.teacherClassSubject.findMany({
-    where: { teacherId: userId },
-    select: { class: { select: { schoolId: true } } },
+  const memberships = await prisma.schoolMember.findMany({
+    where: { userId },
+    select: { schoolId: true },
   });
-
-  const schoolIds = [...new Set(memberships.map((row) => row.class.schoolId))];
-
+  const schoolIds = memberships.map((row) => row.schoolId);
   if (schoolIds.length === 0) {
-    const schools = await prisma.school.findMany({ orderBy: { name: "asc" } });
-    return schools.map((school) => schoolSchema.parse(school));
+    return [];
   }
 
   const schools = await prisma.school.findMany({
@@ -78,9 +74,8 @@ export async function listSchoolsForUser(
 }
 
 /**
- * A teacher "belongs" to a school if they have any TeacherClassSubject
- * on a class in that school. New teachers with zero assignments may create
- * their first class in any existing school (bootstrap).
+ * A teacher may create a class only in a school they have been invited to.
+ * ADMIN may create a class in any existing school.
  */
 export async function assertCanCreateInSchool(
   teacherId: string,
@@ -96,25 +91,46 @@ export async function assertCanCreateInSchool(
     return;
   }
 
-  const membership = await prisma.teacherClassSubject.findFirst({
-    where: {
-      teacherId,
-      class: { schoolId },
-    },
-    select: { teacherId: true },
+  const membership = await prisma.schoolMember.findUnique({
+    where: { userId_schoolId: { userId: teacherId, schoolId } },
+    select: { userId: true },
   });
-  if (membership) {
-    return;
+  if (!membership) {
+    throw new HttpError("You do not belong to this school", 403);
+  }
+}
+
+export async function createSchool(name: string): Promise<SchoolDto> {
+  const school = await prisma.school.create({ data: { name } });
+  return schoolSchema.parse(school);
+}
+
+export async function inviteSchoolMember(
+  schoolId: string,
+  email: string,
+): Promise<{ schoolId: string; userId: string; email: string }> {
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
+  if (!school) {
+    throw new HttpError("School not found", 404);
   }
 
-  const assignmentCount = await prisma.teacherClassSubject.count({
-    where: { teacherId },
+  const user = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
   });
-  if (assignmentCount === 0) {
-    return;
+  if (!user) {
+    throw new HttpError("No user is registered with that email", 404);
+  }
+  if (user.role === "PARENT") {
+    throw new HttpError("Parents cannot be added to a school", 400);
   }
 
-  throw new HttpError("You do not belong to this school", 403);
+  await prisma.schoolMember.upsert({
+    where: { userId_schoolId: { userId: user.id, schoolId } },
+    create: { userId: user.id, schoolId },
+    update: {},
+  });
+
+  return { schoolId, userId: user.id, email: user.email };
 }
 
 export async function createClassForTeacher(
@@ -321,6 +337,19 @@ export async function importStudentsFromCsv(
           studentId = created.id;
           rollToStudentId.set(row.rollNumber, studentId);
           importedStudents.push(toStudentDto(created));
+        } else if (
+          await studentIsEnrolledOutsideCallerAccess(
+            tx,
+            studentId,
+            userId,
+            role,
+          )
+        ) {
+          errors.push({
+            row: row.row,
+            message: `Roll number ${row.rollNumber} belongs to a student in a class you cannot access`,
+          });
+          continue;
         } else {
           const updated = await tx.student.update({
             where: { id: studentId },
@@ -360,6 +389,41 @@ export async function importStudentsFromCsv(
     errors: errors.sort((a, b) => a.row - b.row),
     students: importedStudents.sort((a, b) => a.rollNumber - b.rollNumber),
   };
+}
+
+/**
+ * True when the student is enrolled in at least one class this caller
+ * is not assigned to. Those rows must not be renamed or re-enrolled.
+ */
+async function studentIsEnrolledOutsideCallerAccess(
+  tx: Prisma.TransactionClient,
+  studentId: string,
+  userId: string,
+  role: Role,
+): Promise<boolean> {
+  if (role === "ADMIN") {
+    return false;
+  }
+
+  const enrollments = await tx.enrollment.findMany({
+    where: { studentId },
+    select: { classId: true },
+  });
+  if (enrollments.length === 0) {
+    return false;
+  }
+
+  const accessible = await tx.teacherClassSubject.findMany({
+    where: {
+      teacherId: userId,
+      classId: { in: enrollments.map((enrollment) => enrollment.classId) },
+    },
+    select: { classId: true },
+  });
+  const accessibleIds = new Set(accessible.map((row) => row.classId));
+  return enrollments.some(
+    (enrollment) => !accessibleIds.has(enrollment.classId),
+  );
 }
 
 async function createPendingStatusesForStudent(

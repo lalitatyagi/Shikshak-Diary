@@ -39,9 +39,10 @@ model User {
   role         Role
   createdAt    DateTime @default(now())
 
-  createdTasks       Task[]              @relation("TaskCreatedBy")
-  updatedStatuses    TaskStatus[]        @relation("StatusUpdatedBy")
+  createdTasks       Task[]                @relation("TaskCreatedBy")
+  updatedStatuses    TaskStatus[]          @relation("StatusUpdatedBy")
   teacherAssignments TeacherClassSubject[]
+  schoolMemberships  SchoolMember[]
   auditLogs          AuditLog[]
 }
 
@@ -49,9 +50,23 @@ model School {
   id   String @id @default(cuid())
   name String
 
-  classes  Class[]
-  subjects Subject[]
-  students Student[]
+  classes   Class[]
+  subjects  Subject[]
+  students  Student[]
+  members   SchoolMember[]
+}
+
+/// A teacher may see and create classes only in schools an admin has added them to.
+model SchoolMember {
+  userId    String
+  schoolId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@id([userId, schoolId])
+  @@index([schoolId])
 }
 
 model Class {

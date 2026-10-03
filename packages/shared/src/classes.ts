@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const createSchoolBodySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
+
+export const inviteSchoolMemberBodySchema = z.object({
+  email: z.string().trim().email(),
+});
+
 export const createClassBodySchema = z.object({
   schoolId: z.string().min(1),
   name: z.string().trim().min(1).max(50),
@@ -45,6 +53,10 @@ export const csvImportResultSchema = z.object({
   students: z.array(studentSchema),
 });
 
+export type CreateSchoolBody = z.infer<typeof createSchoolBodySchema>;
+export type InviteSchoolMemberBody = z.infer<
+  typeof inviteSchoolMemberBodySchema
+>;
 export type CreateClassBody = z.infer<typeof createClassBodySchema>;
 export type SchoolDto = z.infer<typeof schoolSchema>;
 export type ClassDto = z.infer<typeof classSchema>;

@@ -8,6 +8,7 @@ import {
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { grantSchoolMembership } from "../test/school-member.js";
 
 loadEnv();
 
@@ -58,6 +59,8 @@ describe("task routes", () => {
       },
     });
     otherToken = (otherRegister.json() as { accessToken: string }).accessToken;
+
+    await grantSchoolMembership(email, schoolId);
 
     const createdClass = await app.inject({
       method: "POST",

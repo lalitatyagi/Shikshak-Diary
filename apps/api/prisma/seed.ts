@@ -74,6 +74,13 @@ async function seed(): Promise<void> {
     },
   });
 
+  await prisma.schoolMember.create({
+    data: {
+      userId: teacher.id,
+      schoolId: school.id,
+    },
+  });
+
   const studentIds: string[] = [];
   for (const plan of students) {
     const student = await prisma.student.create({
