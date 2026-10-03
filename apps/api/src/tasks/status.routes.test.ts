@@ -5,7 +5,10 @@ import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
 import { hashPassword } from "../auth/password.js";
-import { grantSchoolMembership } from "../test/school-member.js";
+import {
+  deleteUsersByEmail,
+  grantSchoolMembership,
+} from "../test/school-member.js";
 
 loadEnv();
 
@@ -110,7 +113,7 @@ describe("tick grid status routes", () => {
     await prisma.school
       .delete({ where: { id: schoolId } })
       .catch(() => undefined);
-    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await deleteUsersByEmail(emails);
     await app.close();
     await prisma.$disconnect();
   });
@@ -147,6 +150,10 @@ describe("tick grid status routes", () => {
       status: "DONE",
       version: cell.version + 1,
     });
+    const audit = await prisma.auditLog.findFirst({
+      where: { entity: "TaskStatus", entityId: cell.id, action: "update" },
+    });
+    expect(audit).toBeTruthy();
   });
 
   it("rejects stale version on PUT", async () => {

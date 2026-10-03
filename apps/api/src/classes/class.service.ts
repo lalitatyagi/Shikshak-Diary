@@ -12,6 +12,7 @@ import {
   type StudentDto,
 } from "@classroom-tracker/shared";
 import { prisma } from "../db.js";
+import { writeAudit } from "../audit.js";
 import { HttpError } from "../errors.js";
 import { parseStudentCsv, type ParsedCsvRow } from "./csv.js";
 
@@ -460,6 +461,19 @@ async function importRows(
         skipDuplicates: true,
       });
     }
+  }
+
+  if (importedStudents.length > 0) {
+    await writeAudit(tx, {
+      userId: input.userId,
+      entity: "Class",
+      entityId: input.classId,
+      action: "import-students",
+      after: {
+        imported: importedStudents.length,
+        rollNumbers: importedStudents.map((student) => student.rollNumber),
+      },
+    });
   }
 
   const failedRows = new Set(errors.map((error) => error.row)).size;

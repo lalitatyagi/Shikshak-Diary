@@ -15,7 +15,7 @@ Live demo: _not deployed yet_
 Demo teacher login (after `npm run db:seed`):
 
 - Email: `teacher@demo.local`
-- Password: `Teacher123!`
+- Password: `Teacher123!` (local demo only — `npm run db:seed` refuses to run when `NODE_ENV` is `production`)
 
 ## Auth API
 
@@ -40,7 +40,7 @@ Demo teacher login (after `npm run db:seed`):
 | POST | `/classes/:classId/students/import` | CSV import; returns per-row errors |
 
 CSV columns: `rollNumber`, `name`, and optional `parentContact`.
-A roll number that already belongs to a student in a class you cannot access is a per-row error. The import does not rename that student or enroll them.
+A roll number that already belongs to a student in a class you cannot access is a per-row error. The import does not rename that student or enroll them. One import accepts at most 200 student rows.
 
 Example body:
 

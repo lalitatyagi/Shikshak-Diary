@@ -9,7 +9,11 @@ import {
   studentSchema,
 } from "@classroom-tracker/shared";
 import type { FastifyInstance } from "fastify";
-import { requireAuth, requireRole } from "../auth/auth.middleware.js";
+import {
+  requireAuth,
+  requireRole,
+  teacherRoles,
+} from "../auth/auth.middleware.js";
 import { sendHttpError } from "../errors.js";
 import {
   createClassForTeacher,
@@ -20,8 +24,6 @@ import {
   listSchoolsForUser,
   listStudentsForClass,
 } from "./class.service.js";
-
-const teacherRoles = ["TEACHER", "CLASS_TEACHER", "ADMIN"] as const;
 
 export async function classRoutes(app: FastifyInstance): Promise<void> {
   app.post(

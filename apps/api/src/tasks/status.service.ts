@@ -14,6 +14,7 @@ import {
 } from "@classroom-tracker/shared";
 import { prisma } from "../db.js";
 import { HttpError } from "../errors.js";
+import { writeAudit } from "../audit.js";
 import { assertCanAccessClass } from "../classes/class.service.js";
 
 function toStatusDto(row: {
@@ -159,6 +160,14 @@ export async function updateTaskStatus(
   const updated = await prisma.taskStatus.findUniqueOrThrow({
     where: { id: statusId },
   });
+  await writeAudit(prisma, {
+    userId,
+    entity: "TaskStatus",
+    entityId: updated.id,
+    action: "update",
+    before: { status: existing.status, version: existing.version },
+    after: { status: updated.status, version: updated.version },
+  });
   return toStatusDto(updated);
 }
 
@@ -190,6 +199,16 @@ export async function markAllComplete(
       updatedById: userId,
     },
   });
+
+  if (result.count > 0) {
+    await writeAudit(prisma, {
+      userId,
+      entity: "Task",
+      entityId: taskId,
+      action: "mark-all-complete",
+      after: { status: target, updated: result.count },
+    });
+  }
 
   return bulkCompleteResultSchema.parse({
     taskId,

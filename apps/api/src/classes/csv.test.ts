@@ -107,6 +107,12 @@ describe("parseStudentCsv", () => {
     expect(result.errors[0]?.message).toMatch(/200/);
   });
 
+  it("rejects scientific notation such as 1e2", () => {
+    const result = parseStudentCsv("rollNumber,name\n1e2,Aarav\n");
+    expect(result.rows).toEqual([]);
+    expect(result.errors[0]?.message).toMatch(/positive integer/i);
+  });
+
   it("requires rollNumber and name headers", () => {
     const result = parseStudentCsv("id,fullname\n1,A\n");
     expect(result.rows).toEqual([]);

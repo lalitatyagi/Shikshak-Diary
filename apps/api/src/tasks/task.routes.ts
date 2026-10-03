@@ -1,14 +1,16 @@
 import { createTaskBodySchema, taskSchema } from "@classroom-tracker/shared";
 import type { FastifyInstance } from "fastify";
-import { requireAuth, requireRole } from "../auth/auth.middleware.js";
+import {
+  requireAuth,
+  requireRole,
+  teacherRoles,
+} from "../auth/auth.middleware.js";
 import { sendHttpError } from "../errors.js";
 import {
   createTaskForClass,
   getTaskById,
   listTasksForClass,
 } from "./task.service.js";
-
-const teacherRoles = ["TEACHER", "CLASS_TEACHER", "ADMIN"] as const;
 
 export async function taskRoutes(app: FastifyInstance): Promise<void> {
   app.post(

@@ -82,6 +82,12 @@ export function buildStudentPlans(
   return students;
 }
 
+export function assertSeedAllowed(nodeEnv: string | undefined): void {
+  if (nodeEnv === "production") {
+    throw new Error("Refusing to seed while NODE_ENV is production");
+  }
+}
+
 export function assertUniqueRollNumbers(students: SeedStudentPlan[]): void {
   const rolls = new Set(students.map((s) => s.rollNumber));
   if (rolls.size !== students.length) {

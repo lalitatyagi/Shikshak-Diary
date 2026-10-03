@@ -13,7 +13,7 @@ import {
   revokeRefreshToken,
   rotateRefreshSession,
 } from "./auth.service.js";
-import { requireAuth, requireRole } from "./auth.middleware.js";
+import { requireAuth, requireRole, teacherRoles } from "./auth.middleware.js";
 import { REFRESH_COOKIE_NAME, refreshCookieOptions } from "./tokens.js";
 
 function setRefreshCookie(reply: FastifyReply, refreshToken: string): void {
@@ -138,7 +138,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/auth/teacher-check",
     {
-      preHandler: [requireAuth, requireRole("TEACHER", "CLASS_TEACHER")],
+      preHandler: [requireAuth, requireRole(...teacherRoles)],
     },
     async (request, reply) => {
       return reply.send({

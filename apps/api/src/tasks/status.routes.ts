@@ -5,15 +5,17 @@ import {
   updateStatusBodySchema,
 } from "@classroom-tracker/shared";
 import type { FastifyInstance } from "fastify";
-import { requireAuth, requireRole } from "../auth/auth.middleware.js";
+import {
+  requireAuth,
+  requireRole,
+  teacherRoles,
+} from "../auth/auth.middleware.js";
 import { sendHttpError } from "../errors.js";
 import {
   getClassGrid,
   markAllComplete,
   updateTaskStatus,
 } from "./status.service.js";
-
-const teacherRoles = ["TEACHER", "CLASS_TEACHER", "ADMIN"] as const;
 
 export async function statusRoutes(app: FastifyInstance): Promise<void> {
   app.get(

@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   SEED,
+  assertSeedAllowed,
   assertUniqueRollNumbers,
   buildStudentPlans,
 } from "./seed-plan.js";
+
+describe("assertSeedAllowed", () => {
+  it("refuses to seed in production", () => {
+    expect(() => assertSeedAllowed("production")).toThrow(/production/);
+    expect(() => assertSeedAllowed("development")).not.toThrow();
+    expect(() => assertSeedAllowed(undefined)).not.toThrow();
+  });
+});
 
 describe("buildStudentPlans", () => {
   it("creates exactly 40 students by default", () => {

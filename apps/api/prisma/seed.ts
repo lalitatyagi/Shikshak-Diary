@@ -10,6 +10,7 @@ import {
 } from "@classroom-tracker/shared";
 import {
   SEED,
+  assertSeedAllowed,
   assertUniqueRollNumbers,
   buildStudentPlans,
 } from "../src/seed/seed-plan.js";
@@ -17,6 +18,7 @@ import {
 const prisma = new PrismaClient();
 
 async function seed(): Promise<void> {
+  assertSeedAllowed(process.env.NODE_ENV);
   const students = buildStudentPlans(SEED.studentCount);
   assertUniqueRollNumbers(students);
 

@@ -224,6 +224,24 @@ describe("auth routes", () => {
       headers: { authorization: `Bearer ${accessToken}` },
     });
     expect(teacherCheck.statusCode).toBe(200);
+
+    await prisma.user.update({
+      where: { email: email.toLowerCase() },
+      data: { role: Role.ADMIN },
+    });
+    const adminLogin = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email, password: "Password123!" },
+    });
+    const adminToken = (adminLogin.json() as { accessToken: string })
+      .accessToken;
+    const adminCheck = await app.inject({
+      method: "GET",
+      url: "/auth/teacher-check",
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(adminCheck.statusCode).toBe(200);
   });
 
   it("rejects a refresh token after logout", async () => {

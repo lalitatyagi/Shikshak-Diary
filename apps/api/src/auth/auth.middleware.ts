@@ -57,6 +57,9 @@ export const requireAuth: preHandlerHookHandler = async (
   }
 };
 
+/** Roles that teach or administer a class. */
+export const teacherRoles = ["TEACHER", "CLASS_TEACHER", "ADMIN"] as const;
+
 /** Use after requireAuth. */
 export function requireRole(...allowed: Role[]): preHandlerHookHandler {
   return async (request, reply) => {

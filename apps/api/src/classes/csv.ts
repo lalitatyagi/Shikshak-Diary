@@ -170,9 +170,11 @@ export function parseStudentCsv(csvText: string): CsvParseResult {
 
     const rowErrors: string[] = [];
 
-    const rollNumber = Number(rollRaw);
-    if (!rollRaw || !Number.isInteger(rollNumber) || rollNumber < 1) {
+    let rollNumber = Number.NaN;
+    if (!/^[1-9]\d*$/.test(rollRaw)) {
       rowErrors.push("rollNumber must be a positive integer");
+    } else {
+      rollNumber = Number(rollRaw);
     }
 
     if (!nameRaw) {

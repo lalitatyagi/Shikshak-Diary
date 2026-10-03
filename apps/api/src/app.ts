@@ -7,9 +7,11 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
+import { AuthError } from "./auth/auth.service.js";
 import { authRoutes } from "./auth/auth.routes.js";
 import { classRoutes } from "./classes/class.routes.js";
-import { defaultersRoutes } from "./defaulters/defaulters.routes.js";
+import { prisma } from "./db.js";
+import { HttpError } from "./errors.js";
 import { taskRoutes } from "./tasks/task.routes.js";
 import { statusRoutes } from "./tasks/status.routes.js";
 
@@ -41,21 +43,47 @@ export async function buildApp(options?: {
 
   await app.register(cookie);
 
-  app.get("/health", async (): Promise<HealthResponse> => {
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof HttpError || error instanceof AuthError) {
+      return reply.status(error.statusCode).send({ error: error.message });
+    }
+    const statusCode =
+      typeof error === "object" &&
+      error &&
+      "statusCode" in error &&
+      typeof error.statusCode === "number"
+        ? error.statusCode
+        : 500;
+    if (statusCode >= 500) {
+      request.log.error(error);
+      return reply.status(500).send({ error: "Internal server error" });
+    }
+    return reply.status(statusCode).send({
+      error: error instanceof Error ? error.message : "Request failed",
+    });
+  });
+
+  app.get("/health", async (request, reply) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (error) {
+      request.log.error(error);
+      return reply.status(503).send({ error: "Database unavailable" });
+    }
+
     const payload: HealthResponse = {
       status: "ok",
       service: "classroom-tracker-api",
       timestamp: new Date().toISOString(),
     };
 
-    return healthResponseSchema.parse(payload);
+    return reply.send(healthResponseSchema.parse(payload));
   });
 
   await app.register(authRoutes);
   await app.register(classRoutes);
   await app.register(taskRoutes);
   await app.register(statusRoutes);
-  await app.register(defaultersRoutes);
 
   return app;
 }

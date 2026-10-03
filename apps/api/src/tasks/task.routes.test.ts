@@ -8,7 +8,10 @@ import {
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
-import { grantSchoolMembership } from "../test/school-member.js";
+import {
+  deleteUsersByEmail,
+  grantSchoolMembership,
+} from "../test/school-member.js";
 
 loadEnv();
 
@@ -103,7 +106,7 @@ describe("task routes", () => {
       .delete({ where: { id: schoolId } })
       .catch(() => undefined);
     if (emails.length > 0) {
-      await prisma.user.deleteMany({ where: { email: { in: emails } } });
+      await deleteUsersByEmail(emails);
     }
     await app.close();
     await prisma.$disconnect();
