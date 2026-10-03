@@ -2,14 +2,15 @@ import { Prisma } from "@prisma/client";
 import {
   classSchema,
   schoolSchema,
+  startOfTodayKolkata,
   studentSchema,
   type ClassDto,
   type CreateClassBody,
   type CsvImportResult,
+  type Role,
   type SchoolDto,
   type StudentDto,
 } from "@classroom-tracker/shared";
-import type { Role } from "@classroom-tracker/shared";
 import { prisma } from "../db.js";
 import { HttpError } from "../errors.js";
 import { parseStudentCsv, type ParsedCsvRow } from "./csv.js";
@@ -42,21 +43,86 @@ function toStudentDto(student: {
   return studentSchema.parse(student);
 }
 
-export async function listSchools(): Promise<SchoolDto[]> {
-  const schools = await prisma.school.findMany({ orderBy: { name: "asc" } });
+/**
+ * Schools the teacher can see.
+ * - ADMIN: all schools
+ * - Teacher with assignments: only schools they belong to (via TeacherClassSubject)
+ * - Teacher with no assignments yet: all schools (bootstrap so they can join one)
+ */
+export async function listSchoolsForUser(
+  userId: string,
+  role: Role,
+): Promise<SchoolDto[]> {
+  if (role === "ADMIN") {
+    const schools = await prisma.school.findMany({ orderBy: { name: "asc" } });
+    return schools.map((school) => schoolSchema.parse(school));
+  }
+
+  const memberships = await prisma.teacherClassSubject.findMany({
+    where: { teacherId: userId },
+    select: { class: { select: { schoolId: true } } },
+  });
+
+  const schoolIds = [...new Set(memberships.map((row) => row.class.schoolId))];
+
+  if (schoolIds.length === 0) {
+    const schools = await prisma.school.findMany({ orderBy: { name: "asc" } });
+    return schools.map((school) => schoolSchema.parse(school));
+  }
+
+  const schools = await prisma.school.findMany({
+    where: { id: { in: schoolIds } },
+    orderBy: { name: "asc" },
+  });
   return schools.map((school) => schoolSchema.parse(school));
+}
+
+/**
+ * A teacher "belongs" to a school if they have any TeacherClassSubject
+ * on a class in that school. New teachers with zero assignments may create
+ * their first class in any existing school (bootstrap).
+ */
+export async function assertCanCreateInSchool(
+  teacherId: string,
+  role: Role,
+  schoolId: string,
+): Promise<void> {
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
+  if (!school) {
+    throw new HttpError("School not found", 404);
+  }
+
+  if (role === "ADMIN") {
+    return;
+  }
+
+  const membership = await prisma.teacherClassSubject.findFirst({
+    where: {
+      teacherId,
+      class: { schoolId },
+    },
+    select: { teacherId: true },
+  });
+  if (membership) {
+    return;
+  }
+
+  const assignmentCount = await prisma.teacherClassSubject.count({
+    where: { teacherId },
+  });
+  if (assignmentCount === 0) {
+    return;
+  }
+
+  throw new HttpError("You do not belong to this school", 403);
 }
 
 export async function createClassForTeacher(
   teacherId: string,
+  role: Role,
   input: CreateClassBody,
 ): Promise<ClassDto> {
-  const school = await prisma.school.findUnique({
-    where: { id: input.schoolId },
-  });
-  if (!school) {
-    throw new HttpError("School not found", 404);
-  }
+  await assertCanCreateInSchool(teacherId, role, input.schoolId);
 
   try {
     const created = await prisma.$transaction(async (tx) => {
@@ -144,7 +210,11 @@ export async function listClassesForUser(
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function assertCanAccessClass(
+/**
+ * Never trust classId alone: class must exist and the teacher must have a
+ * TeacherClassSubject row for it (unless ADMIN).
+ */
+export async function assertCanAccessClass(
   classId: string,
   userId: string,
   role: Role,
@@ -226,6 +296,15 @@ export async function importStudentsFromCsv(
   }
 
   if (accepted.length > 0) {
+    const todayStart = startOfTodayKolkata();
+    const openTasks = await prisma.task.findMany({
+      where: {
+        classId,
+        dueOn: { gte: todayStart },
+      },
+      select: { id: true },
+    });
+
     await prisma.$transaction(async (tx) => {
       for (const row of accepted) {
         let studentId = rollToStudentId.get(row.rollNumber);
@@ -260,6 +339,15 @@ export async function importStudentsFromCsv(
           },
         });
         enrolledIds.add(studentId);
+
+        // Fill grid cells for open tasks so late joiners aren't missing rows
+        if (openTasks.length > 0) {
+          await createPendingStatusesForStudent(
+            tx,
+            studentId,
+            openTasks.map((task) => task.id),
+          );
+        }
       }
     });
   }
@@ -272,4 +360,23 @@ export async function importStudentsFromCsv(
     errors: errors.sort((a, b) => a.row - b.row),
     students: importedStudents.sort((a, b) => a.rollNumber - b.rollNumber),
   };
+}
+
+async function createPendingStatusesForStudent(
+  tx: Prisma.TransactionClient,
+  studentId: string,
+  taskIds: string[],
+): Promise<void> {
+  if (taskIds.length === 0) {
+    return;
+  }
+
+  await tx.taskStatus.createMany({
+    data: taskIds.map((taskId) => ({
+      taskId,
+      studentId,
+      status: "PENDING" as const,
+    })),
+    skipDuplicates: true,
+  });
 }

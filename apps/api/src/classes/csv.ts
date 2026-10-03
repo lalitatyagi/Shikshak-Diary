@@ -20,7 +20,7 @@ const REQUIRED_HEADERS = ["rollnumber", "name"] as const;
 
 /**
  * Minimal CSV parser for student import.
- * Supports commas, optional double-quoted fields, CRLF/LF.
+ * Handles UTF-8 BOM (Excel), quoted fields with commas, CRLF/LF, trailing blanks.
  */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -34,8 +34,8 @@ export function parseCsv(text: string): string[][] {
   };
 
   const pushRow = () => {
-    // Ignore trailing empty line
-    if (row.length === 1 && row[0] === "" && rows.length > 0) {
+    // Ignore blank / trailing empty lines (common in Excel exports)
+    if (row.every((cell) => cell.trim() === "")) {
       row = [];
       return;
     }
@@ -43,6 +43,7 @@ export function parseCsv(text: string): string[][] {
     row = [];
   };
 
+  // Strip UTF-8 BOM that Excel adds at the start of .csv files
   const input = text.replace(/^\uFEFF/, "");
 
   for (let i = 0; i < input.length; i += 1) {
@@ -56,6 +57,7 @@ export function parseCsv(text: string): string[][] {
       } else if (ch === '"') {
         inQuotes = false;
       } else {
+        // Keep \r/\n inside quotes (unusual but valid)
         field += ch;
       }
       continue;
@@ -65,18 +67,23 @@ export function parseCsv(text: string): string[][] {
       inQuotes = true;
     } else if (ch === ",") {
       pushField();
+    } else if (ch === "\r") {
+      // Windows CRLF (\r\n) or lone \r — treat as end of row
+      if (next === "\n") {
+        i += 1;
+      }
+      pushField();
+      pushRow();
     } else if (ch === "\n") {
       pushField();
       pushRow();
-    } else if (ch === "\r") {
-      // ignore; handle on \n or end
     } else {
       field += ch;
     }
   }
 
   pushField();
-  if (row.length > 1 || (row.length === 1 && row[0] !== "")) {
+  if (row.length > 0 && !row.every((cell) => cell.trim() === "")) {
     pushRow();
   }
 

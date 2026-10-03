@@ -13,7 +13,7 @@ import {
   createClassForTeacher,
   importStudentsFromCsv,
   listClassesForUser,
-  listSchools,
+  listSchoolsForUser,
   listStudentsForClass,
 } from "./class.service.js";
 
@@ -23,8 +23,9 @@ export async function classRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/schools",
     { preHandler: [requireAuth, requireRole(...teacherRoles)] },
-    async (_request, reply) => {
-      const schools = await listSchools();
+    async (request, reply) => {
+      const user = request.authUser!;
+      const schools = await listSchoolsForUser(user.id, user.role);
       return reply.send(schools.map((school) => schoolSchema.parse(school)));
     },
   );
@@ -54,6 +55,7 @@ export async function classRoutes(app: FastifyInstance): Promise<void> {
       try {
         const classroom = await createClassForTeacher(
           request.authUser!.id,
+          request.authUser!.role,
           parsed.data,
         );
         return reply.status(201).send(classSchema.parse(classroom));

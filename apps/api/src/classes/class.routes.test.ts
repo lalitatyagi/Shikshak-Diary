@@ -164,7 +164,7 @@ describe("class routes", () => {
     expect((students.json() as unknown[]).length).toBe(2);
   });
 
-  it("forbids another teacher from importing into an unassigned class", async () => {
+  it("forbids another teacher from viewing or importing an unassigned class", async () => {
     const created = await app.inject({
       method: "POST",
       url: "/classes",
@@ -178,7 +178,14 @@ describe("class routes", () => {
     const classId = (created.json() as { id: string }).id;
     classIds.push(classId);
 
-    const response = await app.inject({
+    const listStudents = await app.inject({
+      method: "GET",
+      url: `/classes/${classId}/students`,
+      headers: { authorization: `Bearer ${otherToken}` },
+    });
+    expect([403, 404]).toContain(listStudents.statusCode);
+
+    const importStudents = await app.inject({
       method: "POST",
       url: `/classes/${classId}/students/import`,
       headers: { authorization: `Bearer ${otherToken}` },
@@ -186,8 +193,45 @@ describe("class routes", () => {
         csv: "rollNumber,name\n1,Someone\n",
       },
     });
+    expect([403, 404]).toContain(importStudents.statusCode);
+  });
 
-    expect(response.statusCode).toBe(403);
+  it("rejects creating a class in a school the teacher does not belong to", async () => {
+    // Ensure this teacher already belongs to schoolId (not bootstrap / zero-assignment).
+    const home = await app.inject({
+      method: "POST",
+      url: "/classes",
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        schoolId,
+        name: `Home-${Date.now().toString(36)}`,
+        academicYear: "2025-26",
+      },
+    });
+    expect(home.statusCode).toBe(201);
+    classIds.push((home.json() as { id: string }).id);
+
+    const foreignSchool = await prisma.school.create({
+      data: { name: `Foreign School ${Date.now()}` },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/classes",
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: {
+          schoolId: foreignSchool.id,
+          name: "Intruder-A",
+          academicYear: "2025-26",
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect((response.json() as { error: string }).error).toMatch(/school/i);
+    } finally {
+      await prisma.school.delete({ where: { id: foreignSchool.id } });
+    }
   });
 
   it("rejects duplicate class name in the same school/year", async () => {

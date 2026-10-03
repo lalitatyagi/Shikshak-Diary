@@ -8,8 +8,8 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**Step 4 complete:** create classes, list schools/classes, import students from CSV
-with per-row validation errors.
+**Step 5 complete:** create `DAILY_HOMEWORK` / `NOTEBOOK_CHECK` tasks; each create
+inserts `PENDING` status rows for every enrolled student in one transaction.
 
 Live demo: _not deployed yet_  
 Demo teacher login (after `npm run db:seed`):
@@ -47,6 +47,19 @@ Example body:
 }
 ```
 
+## Tasks API (V1)
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/classes/:classId/tasks` | Create task + PENDING statuses (transaction) |
+| GET | `/classes/:classId/tasks` | List tasks for a class |
+| GET | `/tasks/:taskId` | Task detail with `statusCount` |
+
+V1 create types: `DAILY_HOMEWORK`, `NOTEBOOK_CHECK` only.  
+`maxMarks` / `totalParts` are rejected until V2.  
+`assignedOn` / `dueOn` are **Asia/Kolkata calendar dates** (`YYYY-MM-DD`).  
+Late student imports get `PENDING` rows for open (not past-due) tasks.
+
 ## Architecture (current)
 
 ```
@@ -68,6 +81,7 @@ packages/shared  (Zod schemas + enums shared by web + api)
 | Unified task model | One `Task` + `TaskStatus` for all activity types | Type rules live in application code |
 | Short-lived access JWT + httpOnly refresh cookie | Easy clients + refresh off-limits to JS | Logout is cookie-clear only for now |
 | Partial CSV import with per-row errors | Teacher can fix bad rows without redoing the whole file | Class may be half-imported until they re-run |
+| Task + statuses created in one transaction | No task without a full PENDING grid for the class | Large classes = bigger write; still fine for ~40 students |
 
 ## Prerequisites
 

@@ -15,6 +15,45 @@ describe("parseCsv", () => {
       ["Sharma, A", "ok"],
     ]);
   });
+
+  it("handles Excel CSV quirks: BOM, quoted commas, CRLF, trailing blank lines", () => {
+    const bom = "\uFEFF";
+    const excelCsv =
+      bom +
+      [
+        "rollNumber,name,parentContact",
+        '1,"Sharma, Aarav",',
+        "2,Ananya Verma,9800000002",
+        "",
+        "",
+      ].join("\r\n") +
+      "\r\n";
+
+    const table = parseCsv(excelCsv);
+    expect(table[0]?.[0]).toBe("rollNumber");
+    expect(table).toEqual([
+      ["rollNumber", "name", "parentContact"],
+      ["1", "Sharma, Aarav", ""],
+      ["2", "Ananya Verma", "9800000002"],
+    ]);
+
+    const parsed = parseStudentCsv(excelCsv);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.rows).toEqual([
+      {
+        row: 2,
+        rollNumber: 1,
+        name: "Sharma, Aarav",
+        parentContact: null,
+      },
+      {
+        row: 3,
+        rollNumber: 2,
+        name: "Ananya Verma",
+        parentContact: "9800000002",
+      },
+    ]);
+  });
 });
 
 describe("parseStudentCsv", () => {
