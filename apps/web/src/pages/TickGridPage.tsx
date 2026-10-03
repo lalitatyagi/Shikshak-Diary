@@ -13,7 +13,7 @@ import {
   type TaskStatusDto,
   type TaskType,
 } from "@classroom-tracker/shared";
-import { apiFetch } from "../api";
+import { ApiError, apiFetch } from "../api";
 
 function statusLabel(status: StatusValue): string {
   switch (status) {
@@ -90,6 +90,7 @@ export function TickGridPage() {
     statusId: string;
     taskType: TaskType;
   } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const gridQuery = useQuery({
     queryKey,
@@ -144,7 +145,12 @@ export function TickGridPage() {
               ),
             };
           });
-        } catch {
+        } catch (error) {
+          setSaveError(
+            error instanceof ApiError
+              ? error.message
+              : "Could not save that mark.",
+          );
           await queryClient.invalidateQueries({ queryKey });
         }
       });
@@ -184,6 +190,15 @@ export function TickGridPage() {
     mutationFn: async (taskId: string) =>
       apiFetch(`/tasks/${taskId}/mark-all-complete`, { method: "POST" }),
     onSuccess: () => {
+      setSaveError(null);
+      void queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => {
+      setSaveError(
+        error instanceof ApiError
+          ? error.message
+          : "Could not mark the class complete.",
+      );
       void queryClient.invalidateQueries({ queryKey });
     },
   });
@@ -205,9 +220,17 @@ export function TickGridPage() {
     <main className="mx-auto min-h-screen max-w-[100vw] px-2 py-4 sm:px-4">
       <header className="mb-3 flex items-center justify-between gap-2 px-1">
         <div className="min-w-0">
-          <Link to="/" className="text-sm text-[var(--muted)] underline">
-            ← Classes
-          </Link>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+            <Link to="/" className="text-[var(--muted)] underline">
+              ← Classes
+            </Link>
+            <Link
+              to={`/classes/${classId}/defaulters`}
+              className="text-[var(--accent)] underline"
+            >
+              Defaulters
+            </Link>
+          </div>
           <h1 className="truncate text-xl font-semibold text-[var(--accent)]">
             {grid?.class.name ?? "Tick grid"}
           </h1>
@@ -272,6 +295,15 @@ export function TickGridPage() {
             {createTaskMutation.isPending ? "Creating…" : "Create task"}
           </button>
         </form>
+      )}
+
+      {saveError && (
+        <p
+          role="alert"
+          className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
+          {saveError}
+        </p>
       )}
 
       {gridQuery.isPending && (
