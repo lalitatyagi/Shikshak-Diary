@@ -23,6 +23,26 @@ describe("password hashing", () => {
 });
 
 describe("JWT tokens", () => {
+  it("rejects placeholder secrets that start with change-me", async () => {
+    const previous = process.env.JWT_ACCESS_SECRET;
+    process.env.JWT_ACCESS_SECRET = "change-me-access-secret-min-32-chars";
+    try {
+      await expect(
+        signAccessToken({
+          sub: "user_1",
+          email: "teacher@demo.local",
+          role: "TEACHER",
+        }),
+      ).rejects.toThrow(/random secret/i);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.JWT_ACCESS_SECRET;
+      } else {
+        process.env.JWT_ACCESS_SECRET = previous;
+      }
+    }
+  });
+
   it("signs and verifies an access token with role claims", async () => {
     const token = await signAccessToken({
       sub: "user_1",

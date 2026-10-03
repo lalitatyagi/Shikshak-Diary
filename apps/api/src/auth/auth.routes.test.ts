@@ -117,7 +117,14 @@ describe("auth routes", () => {
       },
     });
 
-    expect(second.statusCode).toBe(409);
+    expect(second.statusCode).toBe(400);
+    expect(JSON.stringify(second.json())).not.toMatch(
+      /already|registered|exists/i,
+    );
+    const count = await prisma.user.count({
+      where: { email: email.toLowerCase() },
+    });
+    expect(count).toBe(1);
   });
 
   it("logs in with email/password and refreshes via cookie", async () => {

@@ -26,6 +26,19 @@ function clearRefreshCookie(reply: FastifyReply): void {
   });
 }
 
+function authWriteLimit(): {
+  config: { rateLimit: { max: number; timeWindow: string } };
+} {
+  return {
+    config: {
+      rateLimit: {
+        max: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
+        timeWindow: "1 minute",
+      },
+    },
+  };
+}
+
 function sendAuthError(reply: FastifyReply, error: unknown) {
   if (error instanceof AuthError) {
     return reply.status(error.statusCode).send({ error: error.message });
@@ -34,7 +47,7 @@ function sendAuthError(reply: FastifyReply, error: unknown) {
 }
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/auth/register", async (request, reply) => {
+  app.post("/auth/register", authWriteLimit(), async (request, reply) => {
     const parsed = registerBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -57,7 +70,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post("/auth/login", async (request, reply) => {
+  app.post("/auth/login", authWriteLimit(), async (request, reply) => {
     const parsed = loginBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({

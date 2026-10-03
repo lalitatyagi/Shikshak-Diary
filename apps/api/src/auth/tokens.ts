@@ -21,8 +21,10 @@ export type RefreshTokenClaims = {
 
 function requireSecret(name: string): Uint8Array {
   const value = process.env[name];
-  if (!value || value.length < 32) {
-    throw new Error(`${name} must be set (min 32 characters)`);
+  if (!value || value.length < 32 || /^change-me/i.test(value)) {
+    throw new Error(
+      `${name} must be a random secret of at least 32 characters`,
+    );
   }
   return new TextEncoder().encode(value);
 }

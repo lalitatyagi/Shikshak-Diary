@@ -101,6 +101,7 @@ packages/shared  (Zod schemas + enums shared by web + api)
 | Unified task model | One `Task` + `TaskStatus` for all activity types | Type rules live in application code |
 | Short-lived access JWT + hashed refresh sessions | The cookie lifetime follows `JWT_REFRESH_TTL`. Each refresh revokes the previous token, and logout revokes it too | A stolen refresh token works only until the next refresh or logout |
 | Single-flight refresh on 401 | One expired access token does not log the teacher out mid-class; parallel calls share one refresh and retry once | If refresh fails, the session is cleared and the browser goes to login |
+| CORS allowlist, helmet, and login rate limit | The API does not reflect arbitrary origins with cookies, and login/register are capped per IP | Local `.env` must list the web origin in `CORS_ORIGINS` |
 | School membership, not open bootstrap | An admin creates the school and invites teachers. A new account with no membership sees no schools and cannot create a class in someone else's. CSV import will not update a student enrolled in a class the caller cannot access; that roll is a per-row error | A teacher cannot self-join a school. Someone with the ADMIN role has to invite them |
 | Partial CSV import with per-row errors | Teacher can fix bad rows without redoing the whole file | Class may be half-imported until they re-run |
 | Task + statuses created in one transaction | No task without a full PENDING grid for the class | Large classes = bigger write; still fine for ~40 students |

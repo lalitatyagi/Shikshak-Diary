@@ -3,7 +3,7 @@ import { loadEnv } from "../src/load-env.js";
 loadEnv();
 
 import { PrismaClient, Role, TaskType } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "../src/auth/password.js";
 import {
   kolkataCalendarDateToInstant,
   toKolkataCalendarDate,
@@ -20,7 +20,7 @@ async function seed(): Promise<void> {
   const students = buildStudentPlans(SEED.studentCount);
   assertUniqueRollNumbers(students);
 
-  const passwordHash = await bcrypt.hash(SEED.teacher.password, 10);
+  const passwordHash = await hashPassword(SEED.teacher.password);
 
   // Idempotent: remove previous demo rows, then recreate.
   // Task.createdById and AuditLog.userId are Restrict — clear those first.

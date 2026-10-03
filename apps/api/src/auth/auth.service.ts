@@ -8,6 +8,10 @@ import {
 } from "@classroom-tracker/shared";
 import { prisma } from "../db.js";
 import { hashPassword, verifyPassword } from "./password.js";
+
+/** Precomputed bcrypt hash so unknown emails take the same time as real ones. */
+const DUMMY_PASSWORD_HASH =
+  "$2a$12$CZJVLAOMQxFeMYiaA1Q5Ku3JQi.6mF3/PSjMqNW7EbtxzEPXbqa3a";
 import {
   hashRefreshToken,
   refreshTokenHashesMatch,
@@ -59,7 +63,7 @@ export async function registerUser(input: RegisterBody): Promise<{
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      throw new AuthError("Email is already registered", 409);
+      throw new AuthError("Unable to register", 400);
     }
     throw error;
   }
@@ -75,6 +79,7 @@ export async function loginUser(input: LoginBody): Promise<{
   });
 
   if (!user) {
+    await verifyPassword(input.password, DUMMY_PASSWORD_HASH);
     throw new AuthError("Invalid email or password", 401);
   }
 
