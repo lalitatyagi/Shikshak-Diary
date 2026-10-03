@@ -219,6 +219,103 @@ describe("auth routes", () => {
     expect(teacherCheck.statusCode).toBe(200);
   });
 
+  it("rejects a refresh token after logout", async () => {
+    const email = uniqueEmail("logout-revoke");
+    createdEmails.push(email);
+
+    const register = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: {
+        name: "Logout Teacher",
+        email,
+        password: "Password123!",
+      },
+    });
+    const cookie = cookieHeader(register.headers["set-cookie"]);
+
+    const logout = await app.inject({
+      method: "POST",
+      url: "/auth/logout",
+      headers: { cookie },
+    });
+    expect(logout.statusCode).toBe(204);
+
+    const refresh = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      headers: { cookie },
+    });
+    expect(refresh.statusCode).toBe(401);
+  });
+
+  it("rotates the refresh token and rejects the previous one", async () => {
+    const email = uniqueEmail("rotate");
+    createdEmails.push(email);
+
+    const register = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: {
+        name: "Rotate Teacher",
+        email,
+        password: "Password123!",
+      },
+    });
+    const firstCookie = cookieHeader(register.headers["set-cookie"]);
+
+    const rotated = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      headers: { cookie: firstCookie },
+    });
+    expect(rotated.statusCode).toBe(200);
+    const nextCookie = cookieHeader(rotated.headers["set-cookie"]);
+    expect(nextCookie).not.toBe(firstCookie);
+
+    const reused = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      headers: { cookie: firstCookie },
+    });
+    expect(reused.statusCode).toBe(401);
+
+    const current = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      headers: { cookie: nextCookie },
+    });
+    expect(current.statusCode).toBe(200);
+  });
+
+  it("sets the refresh cookie lifetime from JWT_REFRESH_TTL", async () => {
+    const previous = process.env.JWT_REFRESH_TTL;
+    process.env.JWT_REFRESH_TTL = "2d";
+    try {
+      const email = uniqueEmail("ttl");
+      createdEmails.push(email);
+      const response = await app.inject({
+        method: "POST",
+        url: "/auth/register",
+        payload: {
+          name: "Ttl Teacher",
+          email,
+          password: "Password123!",
+        },
+      });
+      const cookie = response.cookies.find(
+        (c) => c.name === REFRESH_COOKIE_NAME,
+      );
+      expect(cookie?.maxAge).toBe(60 * 60 * 24 * 2);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.JWT_REFRESH_TTL;
+      } else {
+        process.env.JWT_REFRESH_TTL = previous;
+      }
+    }
+  });
+
   it("clears refresh cookie on logout", async () => {
     const response = await app.inject({
       method: "POST",
@@ -231,6 +328,31 @@ describe("auth routes", () => {
     );
     expect(cleared).toBeTruthy();
     expect(cleared?.value).toBe("");
+  });
+
+  it("rejects an access token after the user is deleted", async () => {
+    const email = uniqueEmail("deleted");
+    createdEmails.push(email);
+
+    const register = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: {
+        name: "Gone Teacher",
+        email,
+        password: "Password123!",
+      },
+    });
+    const { accessToken } = register.json() as { accessToken: string };
+    await prisma.user.delete({ where: { email: email.toLowerCase() } });
+    createdEmails.pop();
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/auth/me",
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(me.statusCode).toBe(401);
   });
 
   it("returns 403 when role is not allowed", async () => {

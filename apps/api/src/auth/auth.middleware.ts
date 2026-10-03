@@ -4,6 +4,7 @@ import type {
   FastifyRequest,
   preHandlerHookHandler,
 } from "fastify";
+import { prisma } from "../db.js";
 import { verifyAccessToken } from "./tokens.js";
 
 /** Claims available after requireAuth (from the access JWT). */
@@ -39,10 +40,17 @@ export const requireAuth: preHandlerHookHandler = async (
 
   try {
     const payload = await verifyAccessToken(token);
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, email: true, role: true },
+    });
+    if (!user) {
+      return reply.status(401).send({ error: "Session is no longer valid" });
+    }
     request.authUser = {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role,
+      id: user.id,
+      email: user.email,
+      role: user.role,
     };
   } catch {
     return reply.status(401).send({ error: "Invalid or expired access token" });

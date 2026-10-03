@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Prisma, type User } from "@prisma/client";
 import {
   authUserSchema,
@@ -7,7 +8,14 @@ import {
 } from "@classroom-tracker/shared";
 import { prisma } from "../db.js";
 import { hashPassword, verifyPassword } from "./password.js";
-import { signAccessToken, signRefreshToken } from "./tokens.js";
+import {
+  hashRefreshToken,
+  refreshTokenHashesMatch,
+  refreshTtlSeconds,
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} from "./tokens.js";
 
 export class AuthError extends Error {
   constructor(
@@ -78,16 +86,61 @@ export async function loginUser(input: LoginBody): Promise<{
   return issueSession(user);
 }
 
-export async function refreshSession(userId: string): Promise<{
+export async function rotateRefreshSession(rawToken: string): Promise<{
   user: AuthUser;
   accessToken: string;
   refreshToken: string;
 }> {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) {
-    throw new AuthError("Session is no longer valid", 401);
+  const claims = await verifyRefreshToken(rawToken);
+  const presentedHash = hashRefreshToken(rawToken);
+
+  return prisma.$transaction(async (tx) => {
+    const row = await tx.refreshToken.findUnique({
+      where: { id: claims.jti },
+    });
+
+    const expired = row ? row.expiresAt.getTime() <= Date.now() : false;
+    const hashOk = row
+      ? refreshTokenHashesMatch(row.tokenHash, presentedHash)
+      : false;
+
+    if (
+      !row ||
+      row.revokedAt ||
+      expired ||
+      !hashOk ||
+      row.userId !== claims.sub
+    ) {
+      throw new AuthError("Invalid or expired refresh token", 401);
+    }
+
+    const user = await tx.user.findUnique({ where: { id: row.userId } });
+    if (!user) {
+      throw new AuthError("Session is no longer valid", 401);
+    }
+
+    await tx.refreshToken.update({
+      where: { id: row.id },
+      data: { revokedAt: new Date() },
+    });
+
+    return issueSession(user, tx);
+  });
+}
+
+/** Revokes the presented refresh token. Unknown tokens are ignored. */
+export async function revokeRefreshToken(rawToken: string): Promise<void> {
+  let claims: { jti: string };
+  try {
+    claims = await verifyRefreshToken(rawToken);
+  } catch {
+    return;
   }
-  return issueSession(user);
+
+  await prisma.refreshToken.updateMany({
+    where: { id: claims.jti, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
 }
 
 export async function getUserById(userId: string): Promise<AuthUser> {
@@ -98,20 +151,31 @@ export async function getUserById(userId: string): Promise<AuthUser> {
   return toAuthUser(user);
 }
 
-async function issueSession(user: User): Promise<{
+async function issueSession(
+  user: User,
+  tx: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<{
   user: AuthUser;
   accessToken: string;
   refreshToken: string;
 }> {
   const authUser = toAuthUser(user);
-  const [accessToken, refreshToken] = await Promise.all([
-    signAccessToken({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    }),
-    signRefreshToken(user.id),
-  ]);
+  const jti = randomUUID();
+  const accessToken = await signAccessToken({
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+  });
+  const refreshToken = await signRefreshToken(user.id, jti);
+
+  await tx.refreshToken.create({
+    data: {
+      id: jti,
+      userId: user.id,
+      tokenHash: hashRefreshToken(refreshToken),
+      expiresAt: new Date(Date.now() + refreshTtlSeconds() * 1000),
+    },
+  });
 
   return { user: authUser, accessToken, refreshToken };
 }

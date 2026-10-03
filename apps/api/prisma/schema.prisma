@@ -43,6 +43,7 @@ model User {
   updatedStatuses    TaskStatus[]          @relation("StatusUpdatedBy")
   teacherAssignments TeacherClassSubject[]
   schoolMemberships  SchoolMember[]
+  refreshTokens      RefreshToken[]
   auditLogs          AuditLog[]
 }
 
@@ -180,6 +181,20 @@ model TaskStatus {
   @@unique([taskId, studentId])
   @@index([studentId])
   @@index([status])
+}
+
+/// Server-side refresh session. The cookie holds the raw JWT; only its hash is stored.
+model RefreshToken {
+  id        String    @id
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model AuditLog {

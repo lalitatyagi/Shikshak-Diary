@@ -9,15 +9,12 @@ import {
   AuthError,
   getUserById,
   loginUser,
-  refreshSession,
   registerUser,
+  revokeRefreshToken,
+  rotateRefreshSession,
 } from "./auth.service.js";
 import { requireAuth, requireRole } from "./auth.middleware.js";
-import {
-  REFRESH_COOKIE_NAME,
-  refreshCookieOptions,
-  verifyRefreshToken,
-} from "./tokens.js";
+import { REFRESH_COOKIE_NAME, refreshCookieOptions } from "./tokens.js";
 
 function setRefreshCookie(reply: FastifyReply, refreshToken: string): void {
   reply.setCookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
@@ -83,7 +80,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post("/auth/logout", async (_request, reply) => {
+  app.post("/auth/logout", async (request, reply) => {
+    const token = request.cookies[REFRESH_COOKIE_NAME];
+    if (token) {
+      await revokeRefreshToken(token);
+    }
     clearRefreshCookie(reply);
     return reply.status(204).send();
   });
@@ -95,8 +96,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
-      const userId = await verifyRefreshToken(token);
-      const session = await refreshSession(userId);
+      const session = await rotateRefreshSession(token);
       setRefreshCookie(reply, session.refreshToken);
       return reply.send(
         authTokensSchema.parse({
