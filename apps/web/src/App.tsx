@@ -1,66 +1,50 @@
-import { useQuery } from "@tanstack/react-query";
-import {
-  healthResponseSchema,
-  type HealthResponse,
-} from "@classroom-tracker/shared";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider, useAuth } from "./auth";
+import { LoginPage } from "./pages/LoginPage";
+import { ClassesPage } from "./pages/ClassesPage";
+import { TickGridPage } from "./pages/TickGridPage";
+import { HealthPage } from "./pages/HealthPage";
+import type { ReactNode } from "react";
 
-async function fetchHealth(): Promise<HealthResponse> {
-  const response = await fetch("/api/health");
-  if (!response.ok) {
-    throw new Error(`Health check failed with ${response.status}`);
+function Protected({ children }: { children: ReactNode }) {
+  const { ready, isAuthenticated } = useAuth();
+  if (!ready) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-lg items-center px-4">
+        <p className="text-[var(--muted)]">Loading…</p>
+      </main>
+    );
   }
-  return healthResponseSchema.parse(await response.json());
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
 }
 
 export function App() {
-  const healthQuery = useQuery({
-    queryKey: ["health"],
-    queryFn: fetchHealth,
-    retry: false,
-  });
-
   return (
-    <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-10">
-      <p className="text-sm tracking-wide text-[var(--muted)] uppercase">
-        Portfolio project
-      </p>
-      <h1 className="mt-2 text-4xl font-semibold tracking-tight text-[var(--accent)]">
-        Classroom Tracker
-      </h1>
-      <p className="mt-3 text-base text-[var(--muted)]">
-        Mobile-first homework and notebook tracking for physical classrooms.
-      </p>
-
-      <section className="mt-8 rounded-xl bg-[var(--surface)] p-5 shadow-sm">
-        <h2 className="text-lg font-medium">API health</h2>
-        {healthQuery.isPending && (
-          <p className="mt-2 text-sm text-[var(--muted)]">Checking…</p>
-        )}
-        {healthQuery.isError && (
-          <p className="mt-2 text-sm text-red-700">
-            API unreachable. Start the API (`npm run dev:api`) and Postgres
-            (`npm run db:up`).
-          </p>
-        )}
-        {healthQuery.data && (
-          <dl className="mt-3 space-y-1 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-[var(--muted)]">Status</dt>
-              <dd className="font-medium text-[var(--accent)]">
-                {healthQuery.data.status}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[var(--muted)]">Service</dt>
-              <dd>{healthQuery.data.service}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[var(--muted)]">Timestamp</dt>
-              <dd>{new Date(healthQuery.data.timestamp).toLocaleString()}</dd>
-            </div>
-          </dl>
-        )}
-      </section>
-    </main>
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/health" element={<HealthPage />} />
+        <Route
+          path="/"
+          element={
+            <Protected>
+              <ClassesPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/classes/:classId/grid"
+          element={
+            <Protected>
+              <TickGridPage />
+            </Protected>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthProvider>
   );
 }

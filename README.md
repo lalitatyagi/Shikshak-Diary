@@ -8,8 +8,8 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**Step 5 complete:** create `DAILY_HOMEWORK` / `NOTEBOOK_CHECK` tasks; each create
-inserts `PENDING` status rows for every enrolled student in one transaction.
+**Step 6 complete:** mobile tick grid — tap to cycle status (optimistic UI),
+bulk “mark all done”, big touch targets at 360px width.
 
 Live demo: _not deployed yet_  
 Demo teacher login (after `npm run db:seed`):
@@ -60,6 +60,23 @@ V1 create types: `DAILY_HOMEWORK`, `NOTEBOOK_CHECK` only.
 `assignedOn` / `dueOn` are **Asia/Kolkata calendar dates** (`YYYY-MM-DD`).  
 Late student imports get `PENDING` rows for open (not past-due) tasks.
 
+## Tick grid API
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/classes/:classId/grid` | Students × tasks × statuses (+ `defaultSubjectId`) |
+| PUT | `/task-statuses/:statusId` | Body `{ status, version }` — queued taps avoid 409 |
+| POST | `/tasks/:taskId/mark-all-complete` | Only updates **PENDING** → DONE/CHECKED |
+
+## Web UI
+
+```bash
+npm run dev:api
+npm run dev:web
+```
+
+Open http://localhost:5173 → sign in → pick a class → tick grid.
+
 ## Architecture (current)
 
 ```
@@ -82,6 +99,7 @@ packages/shared  (Zod schemas + enums shared by web + api)
 | Short-lived access JWT + httpOnly refresh cookie | Easy clients + refresh off-limits to JS | Logout is cookie-clear only for now |
 | Partial CSV import with per-row errors | Teacher can fix bad rows without redoing the whole file | Class may be half-imported until they re-run |
 | Task + statuses created in one transaction | No task without a full PENDING grid for the class | Large classes = bigger write; still fine for ~40 students |
+| Optimistic status cycle + version check | Feels instant on a phone; 409 if another update won | Needs refresh/invalidate after conflicts |
 
 ## Prerequisites
 
