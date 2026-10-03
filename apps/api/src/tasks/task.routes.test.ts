@@ -357,4 +357,44 @@ describe("task routes", () => {
     expect(stored.dueOn.toISOString()).toBe("2026-10-02T18:30:00.000Z");
     expect(toKolkataCalendarDate(stored.assignedOn)).toBe("2026-10-03");
   });
+
+  it("gives a student imported during task creation a status row", async () => {
+    const today = toKolkataCalendarDate(new Date());
+    const [, imported] = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: `/classes/${classId}/tasks`,
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: {
+          subjectId,
+          type: "DAILY_HOMEWORK",
+          title: `Race task ${Date.now().toString(36)}`,
+          assignedOn: today,
+          dueOn: today,
+        },
+      }),
+      app.inject({
+        method: "POST",
+        url: `/classes/${classId}/students/import`,
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { csv: "rollNumber,name\n77,Late Joiner\n" },
+      }),
+    ]);
+
+    expect(imported.statusCode).toBe(200);
+    const student = await prisma.student.findFirstOrThrow({
+      where: { schoolId, rollNumber: 77 },
+    });
+    const openTasks = await prisma.task.findMany({
+      where: { classId, dueOn: { gte: startOfTodayKolkata() } },
+      select: { id: true },
+    });
+    const statusCount = await prisma.taskStatus.count({
+      where: {
+        studentId: student.id,
+        taskId: { in: openTasks.map((task) => task.id) },
+      },
+    });
+    expect(statusCount).toBe(openTasks.length);
+  });
 });

@@ -279,168 +279,194 @@ export async function importStudentsFromCsv(
   const classroom = await assertCanAccessClass(classId, userId, role);
   const parsed = parseStudentCsv(csvText);
 
-  const errors = [...parsed.errors];
-  const importedStudents: StudentDto[] = [];
+  if (parsed.rows.length === 0) {
+    return {
+      imported: 0,
+      failed: new Set(parsed.errors.map((error) => error.row)).size,
+      errors: parsed.errors,
+      students: [],
+    };
+  }
 
-  // Preload existing rolls in this school for conflict checks
-  const existing = await prisma.student.findMany({
-    where: { schoolId: classroom.schoolId },
-    select: { id: true, rollNumber: true },
-  });
-  const rollToStudentId = new Map(
-    existing.map((student) => [student.rollNumber, student.id]),
+  try {
+    return await prisma.$transaction(
+      (tx) =>
+        importRows(tx, {
+          classId,
+          schoolId: classroom.schoolId,
+          userId,
+          role,
+          rows: parsed.rows,
+          parseErrors: parsed.errors,
+        }),
+      { timeout: 15_000 },
+    );
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return {
+        imported: 0,
+        failed: parsed.rows.length,
+        errors: [
+          ...parsed.errors,
+          {
+            row: parsed.rows[0]?.row ?? 1,
+            message:
+              "A roll number was claimed by another import. Retry those rows.",
+          },
+        ].sort((a, b) => a.row - b.row),
+        students: [],
+      };
+    }
+    throw error;
+  }
+}
+
+async function importRows(
+  tx: Prisma.TransactionClient,
+  input: {
+    classId: string;
+    schoolId: string;
+    userId: string;
+    role: Role;
+    rows: ParsedCsvRow[];
+    parseErrors: CsvImportResult["errors"];
+  },
+): Promise<CsvImportResult> {
+  // Serialize imports in this school, and task creation for this class.
+  await tx.$queryRaw(
+    Prisma.sql`SELECT id FROM "School" WHERE id = ${input.schoolId} FOR UPDATE`,
+  );
+  await tx.$queryRaw(
+    Prisma.sql`SELECT id FROM "Class" WHERE id = ${input.classId} FOR UPDATE`,
   );
 
-  const enrolled = await prisma.enrollment.findMany({
-    where: { classId },
+  const existing = await tx.student.findMany({
+    where: { schoolId: input.schoolId },
+    include: { enrollments: { select: { classId: true } } },
+  });
+  const byRoll = new Map(
+    existing.map((student) => [student.rollNumber, student]),
+  );
+
+  const enrolledHere = await tx.enrollment.findMany({
+    where: { classId: input.classId },
     select: { studentId: true },
   });
-  const enrolledIds = new Set(enrolled.map((row) => row.studentId));
+  const enrolledIds = new Set(enrolledHere.map((row) => row.studentId));
 
-  const accepted: ParsedCsvRow[] = [];
+  const accessibleClassIds =
+    input.role === "ADMIN"
+      ? null
+      : new Set(
+          (
+            await tx.teacherClassSubject.findMany({
+              where: { teacherId: input.userId },
+              select: { classId: true },
+            })
+          ).map((row) => row.classId),
+        );
 
-  for (const row of parsed.rows) {
-    const existingId = rollToStudentId.get(row.rollNumber);
-    if (existingId && enrolledIds.has(existingId)) {
+  const openTasks = await tx.task.findMany({
+    where: {
+      classId: input.classId,
+      dueOn: { gte: startOfTodayKolkata() },
+    },
+    select: { id: true },
+  });
+
+  const errors = [...input.parseErrors];
+  const toCreate: ParsedCsvRow[] = [];
+  const toUpdate: Array<{ row: ParsedCsvRow; id: string }> = [];
+
+  for (const row of input.rows) {
+    const student = byRoll.get(row.rollNumber);
+    if (student && enrolledIds.has(student.id)) {
       errors.push({
         row: row.row,
         message: `Student with rollNumber ${row.rollNumber} is already enrolled in this class`,
       });
       continue;
     }
-    accepted.push(row);
+    if (
+      student &&
+      accessibleClassIds &&
+      student.enrollments.some(
+        (enrollment) => !accessibleClassIds.has(enrollment.classId),
+      )
+    ) {
+      errors.push({
+        row: row.row,
+        message: `Roll number ${row.rollNumber} belongs to a student in a class you cannot access`,
+      });
+      continue;
+    }
+    if (student) {
+      toUpdate.push({ row, id: student.id });
+    } else {
+      toCreate.push(row);
+    }
   }
 
-  if (accepted.length > 0) {
-    const todayStart = startOfTodayKolkata();
-    const openTasks = await prisma.task.findMany({
-      where: {
-        classId,
-        dueOn: { gte: todayStart },
-      },
-      select: { id: true },
-    });
-
-    await prisma.$transaction(async (tx) => {
-      for (const row of accepted) {
-        let studentId = rollToStudentId.get(row.rollNumber);
-
-        if (!studentId) {
-          const created = await tx.student.create({
-            data: {
-              schoolId: classroom.schoolId,
-              name: row.name,
-              rollNumber: row.rollNumber,
-              parentContact: row.parentContact,
-            },
-          });
-          studentId = created.id;
-          rollToStudentId.set(row.rollNumber, studentId);
-          importedStudents.push(toStudentDto(created));
-        } else if (
-          await studentIsEnrolledOutsideCallerAccess(
-            tx,
-            studentId,
-            userId,
-            role,
-          )
-        ) {
-          errors.push({
-            row: row.row,
-            message: `Roll number ${row.rollNumber} belongs to a student in a class you cannot access`,
-          });
-          continue;
-        } else {
-          const updated = await tx.student.update({
-            where: { id: studentId },
-            data: {
-              name: row.name,
-              parentContact: row.parentContact,
-            },
-          });
-          importedStudents.push(toStudentDto(updated));
-        }
-
-        await tx.enrollment.create({
-          data: {
-            studentId,
-            classId,
-          },
+  const created =
+    toCreate.length === 0
+      ? []
+      : await tx.student.createManyAndReturn({
+          data: toCreate.map((row) => ({
+            schoolId: input.schoolId,
+            name: row.name,
+            rollNumber: row.rollNumber,
+            parentContact: row.parentContact,
+          })),
         });
-        enrolledIds.add(studentId);
 
-        // Fill grid cells for open tasks so late joiners aren't missing rows
-        if (openTasks.length > 0) {
-          await createPendingStatusesForStudent(
-            tx,
-            studentId,
-            openTasks.map((task) => task.id),
-          );
-        }
-      }
+  const updated = [];
+  for (const item of toUpdate) {
+    updated.push(
+      await tx.student.update({
+        where: { id: item.id },
+        data: {
+          name: item.row.name,
+          parentContact: item.row.parentContact,
+        },
+      }),
+    );
+  }
+
+  const importedStudents = [...created, ...updated].map((student) =>
+    toStudentDto(student),
+  );
+
+  if (importedStudents.length > 0) {
+    await tx.enrollment.createMany({
+      data: importedStudents.map((student) => ({
+        studentId: student.id,
+        classId: input.classId,
+      })),
+      skipDuplicates: true,
     });
+
+    if (openTasks.length > 0) {
+      await tx.taskStatus.createMany({
+        data: importedStudents.flatMap((student) =>
+          openTasks.map((task) => ({
+            taskId: task.id,
+            studentId: student.id,
+            status: "PENDING" as const,
+          })),
+        ),
+        skipDuplicates: true,
+      });
+    }
   }
 
   const failedRows = new Set(errors.map((error) => error.row)).size;
-
   return {
     imported: importedStudents.length,
     failed: failedRows,
     errors: errors.sort((a, b) => a.row - b.row),
     students: importedStudents.sort((a, b) => a.rollNumber - b.rollNumber),
   };
-}
-
-/**
- * True when the student is enrolled in at least one class this caller
- * is not assigned to. Those rows must not be renamed or re-enrolled.
- */
-async function studentIsEnrolledOutsideCallerAccess(
-  tx: Prisma.TransactionClient,
-  studentId: string,
-  userId: string,
-  role: Role,
-): Promise<boolean> {
-  if (role === "ADMIN") {
-    return false;
-  }
-
-  const enrollments = await tx.enrollment.findMany({
-    where: { studentId },
-    select: { classId: true },
-  });
-  if (enrollments.length === 0) {
-    return false;
-  }
-
-  const accessible = await tx.teacherClassSubject.findMany({
-    where: {
-      teacherId: userId,
-      classId: { in: enrollments.map((enrollment) => enrollment.classId) },
-    },
-    select: { classId: true },
-  });
-  const accessibleIds = new Set(accessible.map((row) => row.classId));
-  return enrollments.some(
-    (enrollment) => !accessibleIds.has(enrollment.classId),
-  );
-}
-
-async function createPendingStatusesForStudent(
-  tx: Prisma.TransactionClient,
-  studentId: string,
-  taskIds: string[],
-): Promise<void> {
-  if (taskIds.length === 0) {
-    return;
-  }
-
-  await tx.taskStatus.createMany({
-    data: taskIds.map((taskId) => ({
-      taskId,
-      studentId,
-      status: "PENDING" as const,
-    })),
-    skipDuplicates: true,
-  });
 }

@@ -4,6 +4,7 @@ import { toKolkataCalendarDate } from "@classroom-tracker/shared";
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { hashPassword } from "../auth/password.js";
 import { grantSchoolMembership } from "../test/school-member.js";
 
 loadEnv();
@@ -254,5 +255,41 @@ describe("tick grid status routes", () => {
       headers: { authorization: `Bearer ${otherToken}` },
     });
     expect([403, 404]).toContain(markAll.statusCode);
+  });
+
+  it("lets an admin open the grid when the class has no teacher assignment", async () => {
+    await prisma.teacherClassSubject.deleteMany({ where: { classId } });
+
+    const adminEmail = uniqueEmail("grid-admin");
+    emails.push(adminEmail);
+    await prisma.user.create({
+      data: {
+        name: "Grid Admin",
+        email: adminEmail,
+        passwordHash: await hashPassword("Password123!"),
+        role: "ADMIN",
+      },
+    });
+    const login = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: adminEmail, password: "Password123!" },
+    });
+    const adminToken = (login.json() as { accessToken: string }).accessToken;
+
+    const grid = await app.inject({
+      method: "GET",
+      url: `/classes/${classId}/grid`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(grid.statusCode).toBe(200);
+
+    const subject = await prisma.subject.findFirstOrThrow({
+      where: { schoolId },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    });
+    expect((grid.json() as { defaultSubjectId: string }).defaultSubjectId).toBe(
+      subject.id,
+    );
   });
 });

@@ -369,4 +369,71 @@ describe("class routes", () => {
 
     expect(second.statusCode).toBe(409);
   });
+
+  it("does not 500 when two classes import the same new roll at once", async () => {
+    const otherEmail = uniqueEmail("race-teacher");
+    emails.push(otherEmail);
+    const registered = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: {
+        name: "Race Teacher",
+        email: otherEmail,
+        password: "Password123!",
+      },
+    });
+    const otherAccess = (registered.json() as { accessToken: string })
+      .accessToken;
+    await grantSchoolMembership(otherEmail, schoolId);
+
+    const firstClass = await app.inject({
+      method: "POST",
+      url: "/classes",
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        schoolId,
+        name: `Race-A-${Date.now().toString(36)}`,
+        academicYear: "2025-26",
+      },
+    });
+    const secondClass = await app.inject({
+      method: "POST",
+      url: "/classes",
+      headers: { authorization: `Bearer ${otherAccess}` },
+      payload: {
+        schoolId,
+        name: `Race-B-${Date.now().toString(36)}`,
+        academicYear: "2025-26",
+      },
+    });
+    const classA = (firstClass.json() as { id: string }).id;
+    const classB = (secondClass.json() as { id: string }).id;
+    classIds.push(classA, classB);
+
+    const [left, right] = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: `/classes/${classA}/students/import`,
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { csv: "rollNumber,name\n88,From A\n" },
+      }),
+      app.inject({
+        method: "POST",
+        url: `/classes/${classB}/students/import`,
+        headers: { authorization: `Bearer ${otherAccess}` },
+        payload: { csv: "rollNumber,name\n88,From B\n" },
+      }),
+    ]);
+
+    expect(left.statusCode).toBe(200);
+    expect(right.statusCode).toBe(200);
+    const results = [left.json(), right.json()] as Array<{ imported: number }>;
+    expect(results.filter((result) => result.imported === 1)).toHaveLength(1);
+
+    const students = await prisma.student.findMany({
+      where: { schoolId, rollNumber: 88 },
+    });
+    expect(students).toHaveLength(1);
+    expect(["From A", "From B"]).toContain(students[0]?.name);
+  });
 });

@@ -18,6 +18,9 @@ export type CsvParseResult = {
 
 const REQUIRED_HEADERS = ["rollnumber", "name"] as const;
 
+/** A class is about 40 students. This cap keeps one import inside a single transaction. */
+export const MAX_STUDENT_CSV_ROWS = 200;
+
 /**
  * Minimal CSV parser for student import.
  * Handles UTF-8 BOM (Excel), quoted fields with commas, CRLF/LF, trailing blanks.
@@ -127,6 +130,25 @@ export function parseStudentCsv(csvText: string): CsvParseResult {
         ],
       };
     }
+  }
+
+  let dataRows = 0;
+  for (let i = 1; i < table.length; i += 1) {
+    const line = table[i]!;
+    if (!line.every((cell) => cell.trim() === "")) {
+      dataRows += 1;
+    }
+  }
+  if (dataRows > MAX_STUDENT_CSV_ROWS) {
+    return {
+      rows: [],
+      errors: [
+        {
+          row: 1,
+          message: `CSV is limited to ${MAX_STUDENT_CSV_ROWS} student rows`,
+        },
+      ],
+    };
   }
 
   const rows: ParsedCsvRow[] = [];

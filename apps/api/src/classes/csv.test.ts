@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv, parseStudentCsv } from "./csv.js";
+import { MAX_STUDENT_CSV_ROWS, parseCsv, parseStudentCsv } from "./csv.js";
 
 describe("parseCsv", () => {
   it("parses simple comma-separated rows", () => {
@@ -95,6 +95,16 @@ describe("parseStudentCsv", () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]?.name).toBe("Valid Student");
     expect(result.errors.map((e) => e.row).sort()).toEqual([3, 4, 5]);
+  });
+
+  it("rejects a file with more than the row cap", () => {
+    const lines = ["rollNumber,name"];
+    for (let roll = 1; roll <= MAX_STUDENT_CSV_ROWS + 1; roll += 1) {
+      lines.push(`${roll},Student ${roll}`);
+    }
+    const result = parseStudentCsv(lines.join("\n"));
+    expect(result.rows).toEqual([]);
+    expect(result.errors[0]?.message).toMatch(/200/);
   });
 
   it("requires rollNumber and name headers", () => {

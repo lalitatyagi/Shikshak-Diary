@@ -51,9 +51,18 @@ export async function getClassGrid(
 
   const assignment = await prisma.teacherClassSubject.findFirst({
     where: role === "ADMIN" ? { classId } : { classId, teacherId: userId },
+    orderBy: { subjectId: "asc" },
   });
-  if (!assignment) {
-    throw new HttpError("No subject assignment found for this class", 403);
+  let defaultSubjectId = assignment?.subjectId;
+  if (!defaultSubjectId && role === "ADMIN") {
+    const subject = await prisma.subject.findFirst({
+      where: { schoolId: classroom.schoolId },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    });
+    defaultSubjectId = subject?.id;
+  }
+  if (!defaultSubjectId) {
+    throw new HttpError("No subject found for this class", 404);
   }
 
   const [enrollments, tasks] = await Promise.all([
@@ -82,7 +91,7 @@ export async function getClassGrid(
       name: classroom.name,
       academicYear: classroom.academicYear,
     },
-    defaultSubjectId: assignment.subjectId,
+    defaultSubjectId,
     students: enrollments.map((enrollment) =>
       studentSchema.parse(enrollment.student),
     ),

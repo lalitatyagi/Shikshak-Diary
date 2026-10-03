@@ -6,6 +6,7 @@ import {
   type Role,
   type TaskDto,
 } from "@classroom-tracker/shared";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { HttpError } from "../errors.js";
 import { assertCanAccessClass } from "../classes/class.service.js";
@@ -90,15 +91,18 @@ export async function createTaskForClass(
   await assertCanAccessClass(classId, teacherId, role);
   await assertCanTeachSubject(teacherId, role, classId, input.subjectId);
 
-  const enrollments = await prisma.enrollment.findMany({
-    where: { classId },
-    select: { studentId: true },
-  });
-
   const assignedOn = kolkataCalendarDateToInstant(input.assignedOn);
   const dueOn = kolkataCalendarDateToInstant(input.dueOn);
 
   const created = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(
+      Prisma.sql`SELECT id FROM "Class" WHERE id = ${classId} FOR UPDATE`,
+    );
+    const enrollments = await tx.enrollment.findMany({
+      where: { classId },
+      select: { studentId: true },
+    });
+
     const task = await tx.task.create({
       data: {
         classId,
@@ -124,10 +128,10 @@ export async function createTaskForClass(
       });
     }
 
-    return task;
+    return { task, statusCount: enrollments.length };
   });
 
-  return toTaskDto(created, enrollments.length);
+  return toTaskDto(created.task, created.statusCount);
 }
 
 export async function listTasksForClass(
