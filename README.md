@@ -8,8 +8,8 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**Step 3 complete:** email/password auth with JWT access tokens, httpOnly refresh
-cookies, protected routes, and role checks.
+**Step 4 complete:** create classes, list schools/classes, import students from CSV
+with per-row validation errors.
 
 Live demo: _not deployed yet_  
 Demo teacher login (after `npm run db:seed`):
@@ -21,11 +21,31 @@ Demo teacher login (after `npm run db:seed`):
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| POST | `/auth/register` | Creates a `TEACHER` (open self-serve register for V1) |
+| POST | `/auth/register` | Creates a `TEACHER` (ignores any `role` in body) |
 | POST | `/auth/login` | Returns `{ accessToken, user }`, sets refresh cookie |
 | POST | `/auth/refresh` | Rotates tokens using httpOnly `refreshToken` cookie |
 | POST | `/auth/logout` | Clears refresh cookie |
 | GET | `/auth/me` | Requires `Authorization: Bearer <accessToken>` |
+
+## Classes & students API
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/schools` | List schools |
+| GET | `/classes` | Classes assigned to the teacher |
+| POST | `/classes` | Create class + subject link for the teacher |
+| GET | `/classes/:classId/students` | Enrolled students (roll order) |
+| POST | `/classes/:classId/students/import` | CSV import; returns per-row errors |
+
+CSV columns: `rollNumber`, `name`, and optional `parentContact`.
+
+Example body:
+
+```json
+{
+  "csv": "rollNumber,name,parentContact\n1,Aarav Sharma,\n2,Ananya Verma,9800000002\n"
+}
+```
 
 ## Architecture (current)
 
@@ -45,9 +65,9 @@ packages/shared  (Zod schemas + enums shared by web + api)
 | Decision | Why | Trade-off |
 | --- | --- | --- |
 | npm workspaces monorepo | Share Zod types between web and API; one CI pipeline | Slightly heavier than two separate repos |
-| Unified task model | One `Task` + `TaskStatus` for homework, tests, notebook checks | Type-specific validation lives in application code |
-| Committed Prisma migrations | Schema history is reviewable in git | Never edit applied migrations |
-| Short-lived access JWT + httpOnly refresh cookie | Access token is easy for mobile clients; refresh stays off JS | Logout is cookie-clear only (no server-side token denylist yet) |
+| Unified task model | One `Task` + `TaskStatus` for all activity types | Type rules live in application code |
+| Short-lived access JWT + httpOnly refresh cookie | Easy clients + refresh off-limits to JS | Logout is cookie-clear only for now |
+| Partial CSV import with per-row errors | Teacher can fix bad rows without redoing the whole file | Class may be half-imported until they re-run |
 
 ## Prerequisites
 
@@ -57,38 +77,26 @@ packages/shared  (Zod schemas + enums shared by web + api)
 ## Local setup
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Env file (apps/api/.env is what migrate + seed + API use)
 cp .env.example .env
 cp .env apps/api/.env
-# Or use Neon: neon link … (writes DATABASE_URL)
-
-# 3. Apply migrations + seed demo data
 npm run db:migrate
 npm run db:seed
-
-# 4. Run API and web (separate terminals)
 npm run dev:api
 npm run dev:web
 ```
 
 - Web: http://localhost:5173  
 - API health: http://localhost:3001/health  
-- Login: `POST http://localhost:3001/auth/login` with demo credentials
+- Login: `POST http://localhost:3001/auth/login`
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm run lint` | ESLint across the monorepo |
-| `npm run format:check` | Prettier check |
-| `npm run typecheck` | TypeScript `--noEmit` in each workspace |
-| `npm test` | Vitest in each workspace |
-| `npm run db:up` / `db:down` | Start/stop Postgres via Docker Compose |
-| `npm run db:migrate` | Apply committed migrations |
-| `npm run db:seed` | Seed 1 school, teacher, class, 40 students |
+| `npm run lint` / `typecheck` / `test` | Quality checks |
+| `npm run db:migrate` | Apply migrations |
+| `npm run db:seed` | Seed demo school/teacher/class/40 students |
 
 ## Out of scope
 

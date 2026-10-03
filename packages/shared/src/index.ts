@@ -17,3 +17,18 @@ export {
   type AuthUser,
   type AuthTokens,
 } from "./auth.js";
+export {
+  createClassBodySchema,
+  schoolSchema,
+  classSchema,
+  studentSchema,
+  csvImportBodySchema,
+  csvImportResultSchema,
+  csvRowErrorSchema,
+  type CreateClassBody,
+  type SchoolDto,
+  type ClassDto,
+  type StudentDto,
+  type CsvImportBody,
+  type CsvImportResult,
+} from "./classes.js";

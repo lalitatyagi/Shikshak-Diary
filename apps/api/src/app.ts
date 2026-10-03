@@ -6,6 +6,7 @@ import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import { authRoutes } from "./auth/auth.routes.js";
+import { classRoutes } from "./classes/class.routes.js";
 
 export async function buildApp(options?: {
   logger?: boolean;
@@ -32,6 +33,7 @@ export async function buildApp(options?: {
   });
 
   await app.register(authRoutes);
+  await app.register(classRoutes);
 
   return app;
 }
