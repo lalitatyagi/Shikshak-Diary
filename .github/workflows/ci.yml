@@ -10,6 +10,27 @@ jobs:
     name: Lint, typecheck, test
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: classroom_tracker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d classroom_tracker"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/classroom_tracker?schema=public
+      JWT_ACCESS_SECRET: ci-access-secret-min-32-characters-long
+      JWT_REFRESH_SECRET: ci-refresh-secret-min-32-characters-long
+      NODE_ENV: test
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,8 +46,9 @@ jobs:
 
       - name: Generate Prisma Client
         run: npm run db:generate
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/classroom_tracker?schema=public
+
+      - name: Apply migrations
+        run: npm run db:migrate
 
       - name: Lint
         run: npm run lint
@@ -39,5 +61,3 @@ jobs:
 
       - name: Test
         run: npm test
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/classroom_tracker?schema=public

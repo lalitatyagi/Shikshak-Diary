@@ -42,7 +42,9 @@
   "allowScripts": {
     "@prisma/client@6.5.0": true,
     "@prisma/engines@6.5.0": true,
-    "prisma@6.5.0": true
+    "prisma@6.5.0": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.25.12": true
   },
   "dependencies": {
     "@neon/config": "^1.8.3",

@@ -2,12 +2,24 @@ import {
   healthResponseSchema,
   type HealthResponse,
 } from "@classroom-tracker/shared";
+import cookie from "@fastify/cookie";
+import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
+import { authRoutes } from "./auth/auth.routes.js";
 
-export function buildApp(options?: { logger?: boolean }): FastifyInstance {
+export async function buildApp(options?: {
+  logger?: boolean;
+}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options?.logger ?? true,
   });
+
+  await app.register(cors, {
+    origin: true,
+    credentials: true,
+  });
+
+  await app.register(cookie);
 
   app.get("/health", async (): Promise<HealthResponse> => {
     const payload: HealthResponse = {
@@ -18,6 +30,8 @@ export function buildApp(options?: { logger?: boolean }): FastifyInstance {
 
     return healthResponseSchema.parse(payload);
   });
+
+  await app.register(authRoutes);
 
   return app;
 }

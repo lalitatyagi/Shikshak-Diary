@@ -8,8 +8,8 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**Step 2 complete:** Prisma schema (unified task model), committed migration, and
-seed script (1 school, 1 teacher, 1 class, 40 students).
+**Step 3 complete:** email/password auth with JWT access tokens, httpOnly refresh
+cookies, protected routes, and role checks.
 
 Live demo: _not deployed yet_  
 Demo teacher login (after `npm run db:seed`):
@@ -17,7 +17,15 @@ Demo teacher login (after `npm run db:seed`):
 - Email: `teacher@demo.local`
 - Password: `Teacher123!`
 
-Auth routes arrive in Step 3 — the seeded user is ready for that.
+## Auth API
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/auth/register` | Creates a `TEACHER` (open self-serve register for V1) |
+| POST | `/auth/login` | Returns `{ accessToken, user }`, sets refresh cookie |
+| POST | `/auth/refresh` | Rotates tokens using httpOnly `refreshToken` cookie |
+| POST | `/auth/logout` | Clears refresh cookie |
+| GET | `/auth/me` | Requires `Authorization: Bearer <accessToken>` |
 
 ## Architecture (current)
 
@@ -25,10 +33,10 @@ Auth routes arrive in Step 3 — the seeded user is ready for that.
 apps/web  (React + Vite)
     |
     v
-apps/api  (Fastify + Prisma)
+apps/api  (Fastify + Prisma + JWT auth)
     |
     v
-PostgreSQL  (Docker Compose)  — School / Class / Student / Task / TaskStatus …
+PostgreSQL  (Neon or Docker Compose)
 packages/shared  (Zod schemas + enums shared by web + api)
 ```
 
@@ -37,13 +45,14 @@ packages/shared  (Zod schemas + enums shared by web + api)
 | Decision | Why | Trade-off |
 | --- | --- | --- |
 | npm workspaces monorepo | Share Zod types between web and API; one CI pipeline | Slightly heavier than two separate repos |
-| Unified task model | One `Task` + `TaskStatus` for homework, tests, notebook checks | Type-specific validation lives in application code, not separate tables |
-| Committed Prisma migrations | Schema history is reviewable in git; deploys use `migrate deploy` | Requires discipline — never edit applied migrations |
+| Unified task model | One `Task` + `TaskStatus` for homework, tests, notebook checks | Type-specific validation lives in application code |
+| Committed Prisma migrations | Schema history is reviewable in git | Never edit applied migrations |
+| Short-lived access JWT + httpOnly refresh cookie | Access token is easy for mobile clients; refresh stays off JS | Logout is cookie-clear only (no server-side token denylist yet) |
 
 ## Prerequisites
 
 - Node.js 20+
-- Docker Desktop (for Postgres) — install from https://www.docker.com/products/docker-desktop/ if `docker` is not on your PATH
+- Postgres via Neon (linked) or Docker Desktop for local Compose
 
 ## Local setup
 
@@ -51,25 +60,23 @@ packages/shared  (Zod schemas + enums shared by web + api)
 # 1. Install dependencies
 npm install
 
-# 2. Env file (root + copy for Prisma CLI in apps/api)
+# 2. Env file (apps/api/.env is what migrate + seed + API use)
 cp .env.example .env
 cp .env apps/api/.env
+# Or use Neon: neon link … (writes DATABASE_URL)
 
-# 3. Start Postgres
-npm run db:up
-
-# 4. Apply migrations + seed demo data
+# 3. Apply migrations + seed demo data
 npm run db:migrate
 npm run db:seed
 
-# 5. Run API and web (separate terminals)
+# 4. Run API and web (separate terminals)
 npm run dev:api
 npm run dev:web
 ```
 
 - Web: http://localhost:5173  
 - API health: http://localhost:3001/health  
-- Postgres: `localhost:5432` (user/password/db from `.env.example`)
+- Login: `POST http://localhost:3001/auth/login` with demo credentials
 
 ## Scripts
 
@@ -80,11 +87,8 @@ npm run dev:web
 | `npm run typecheck` | TypeScript `--noEmit` in each workspace |
 | `npm test` | Vitest in each workspace |
 | `npm run db:up` / `db:down` | Start/stop Postgres via Docker Compose |
-| `npm run db:generate` | Generate Prisma Client |
-| `npm run db:migrate` | Apply committed migrations (`migrate deploy`) |
-| `npm run db:migrate:dev` | Create/apply migrations during development |
+| `npm run db:migrate` | Apply committed migrations |
 | `npm run db:seed` | Seed 1 school, teacher, class, 40 students |
-| `npm run db:reset` | Reset DB, re-apply migrations, seed |
 
 ## Out of scope
 
