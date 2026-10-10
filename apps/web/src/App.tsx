@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./auth";
 import { LoginPage } from "./pages/LoginPage";
 import { ClassesPage } from "./pages/ClassesPage";
 import { TickGridPage } from "./pages/TickGridPage";
+import { DefaultersPage } from "./pages/DefaultersPage";
 import { HealthPage } from "./pages/HealthPage";
 import type { ReactNode } from "react";
 
@@ -40,6 +41,14 @@ export function App() {
           element={
             <Protected>
               <TickGridPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/classes/:classId/defaulters"
+          element={
+            <Protected>
+              <DefaultersPage />
             </Protected>
           }
         />

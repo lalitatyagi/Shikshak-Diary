@@ -119,6 +119,7 @@ async function seed(): Promise<void> {
     },
   ];
 
+  const taskIds: string[] = [];
   for (const sample of sampleTasks) {
     const task = await prisma.task.create({
       data: {
@@ -132,6 +133,7 @@ async function seed(): Promise<void> {
         dueOn: todayInstant,
       },
     });
+    taskIds.push(task.id);
 
     await prisma.taskStatus.createMany({
       data: studentIds.map((studentId) => ({
@@ -139,6 +141,27 @@ async function seed(): Promise<void> {
         studentId,
         status: "PENDING" as const,
       })),
+    });
+  }
+
+  // Demo defaulters: first 3 students miss both sample tasks (2+ misses).
+  const demoDefaulterIds = studentIds.slice(0, 3);
+  await prisma.taskStatus.updateMany({
+    where: {
+      taskId: { in: taskIds },
+      studentId: { in: demoDefaulterIds },
+    },
+    data: { status: "NOT_DONE" },
+  });
+  // Notebook check uses NOT_CHECKED, not NOT_DONE.
+  const notebookTaskId = taskIds[1];
+  if (notebookTaskId) {
+    await prisma.taskStatus.updateMany({
+      where: {
+        taskId: notebookTaskId,
+        studentId: { in: demoDefaulterIds },
+      },
+      data: { status: "NOT_CHECKED" },
     });
   }
 
@@ -152,7 +175,8 @@ async function seed(): Promise<void> {
   console.log(`  Class:    ${classroom.name} (${classroom.academicYear})`);
   console.log(`  Subject:  ${subject.name}`);
   console.log(`  Students: ${enrolledCount} enrolled`);
-  console.log(`  Tasks:    ${sampleTasks.length} sample tasks (PENDING)`);
+  console.log(`  Tasks:    ${sampleTasks.length} sample tasks`);
+  console.log(`  Demo:     ${demoDefaulterIds.length} students with 2 misses`);
 }
 
 seed()

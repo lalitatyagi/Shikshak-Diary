@@ -8,8 +8,8 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**Step 6 complete:** mobile tick grid — tap to cycle status (optimistic UI),
-bulk “mark all done”, big touch targets at 360px width.
+**Step 7 complete:** defaulters view — students with 2+ NOT_DONE / NOT_CHECKED
+in the last N days (Kolkata calendar window), plus tick-grid create-task UX.
 
 Live demo: _not deployed yet_  
 Demo teacher login (after `npm run db:seed`):
@@ -71,6 +71,14 @@ Late student imports get `PENDING` rows for open (not past-due) tasks.
 | PUT | `/task-statuses/:statusId` | Body `{ status, version }` — queued taps avoid 409 |
 | POST | `/tasks/:taskId/mark-all-complete` | Only updates **PENDING** → DONE/CHECKED |
 
+## Defaulters API
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/classes/:classId/defaulters?days=7` | Students with **2+** `NOT_DONE` / `NOT_CHECKED` on tasks assigned in the last N Kolkata days (`days` 1–90, default 7) |
+
+Seed marks 3 demo students as defaulters so the list is not empty.
+
 ## Web UI
 
 ```bash
@@ -78,7 +86,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-Open http://localhost:5173 → sign in → pick a class → tick grid.
+Open http://localhost:5173 → sign in → pick a class → tick grid or defaulters.
 
 ## Architecture (current)
 
@@ -106,6 +114,7 @@ packages/shared  (Zod schemas + enums shared by web + api)
 | Partial CSV import with per-row errors | Teacher can fix bad rows without redoing the whole file | Class may be half-imported until they re-run |
 | Task + statuses created in one transaction | No task without a full PENDING grid for the class | Large classes = bigger write; still fine for ~40 students |
 | Optimistic status cycle + version check | Feels instant on a phone; 409 if another update won | Needs refresh/invalidate after conflicts |
+| SQL aggregation for defaulters | One query with `HAVING COUNT(*) >= 2`; cheap for ~40 students | Miss criteria are status-based, not “late relative to due date” yet |
 
 ## Prerequisites
 

@@ -51,6 +51,32 @@ export function startOfTodayKolkata(now: Date = new Date()): Date {
   return kolkataCalendarDateToInstant(toKolkataCalendarDate(now));
 }
 
+/**
+ * Shift a Kolkata calendar date by whole days.
+ * Safe for Asia/Kolkata (no DST): midnight IST + 24h is the next calendar day.
+ */
+export function addKolkataCalendarDays(dateStr: string, days: number): string {
+  const instant = kolkataCalendarDateToInstant(dateStr);
+  const shifted = new Date(instant.getTime() + days * 24 * 60 * 60 * 1000);
+  return toKolkataCalendarDate(shifted);
+}
+
+/**
+ * Inclusive window of the last `days` Kolkata calendar days ending today.
+ * days=7 → fromDate is 6 days before toDate.
+ */
+export function defaultersWindow(
+  days: number,
+  now: Date = new Date(),
+): { fromDate: string; toDate: string } {
+  if (!Number.isInteger(days) || days < 1) {
+    throw new Error(`days must be a positive integer, got: ${days}`);
+  }
+  const toDate = toKolkataCalendarDate(now);
+  const fromDate = addKolkataCalendarDays(toDate, -(days - 1));
+  return { fromDate, toDate };
+}
+
 /** True when the task's due calendar day is before today's Kolkata date. */
 export function isPastDueInKolkata(
   dueOn: Date,

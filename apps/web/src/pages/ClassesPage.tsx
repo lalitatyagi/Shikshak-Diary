@@ -42,24 +42,35 @@ export function ClassesPage() {
 
       <ul className="mt-6 space-y-3">
         {(classesQuery.data ?? []).map((classroom: ClassDto) => (
-          <li key={classroom.id}>
-            <Link
-              to={`/classes/${classroom.id}/grid`}
-              className="flex min-h-14 items-center justify-between rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm"
-            >
-              <span>
-                <span className="block text-lg font-medium">
-                  {classroom.name}
-                </span>
-                <span className="text-sm text-[var(--muted)]">
+          <li
+            key={classroom.id}
+            className="rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-lg font-medium">{classroom.name}</p>
+                <p className="text-sm text-[var(--muted)]">
                   {classroom.academicYear}
                   {classroom.studentCount != null
                     ? ` · ${classroom.studentCount} students`
                     : ""}
-                </span>
-              </span>
-              <span className="text-[var(--accent)]">Mark →</span>
-            </Link>
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Link
+                to={`/classes/${classroom.id}/grid`}
+                className="flex min-h-11 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-medium text-white"
+              >
+                Tick grid
+              </Link>
+              <Link
+                to={`/classes/${classroom.id}/defaulters`}
+                className="flex min-h-11 items-center justify-center rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+              >
+                Defaulters
+              </Link>
+            </div>
           </li>
         ))}
       </ul>

@@ -40,7 +40,7 @@ Scope: `apps/api`, `apps/web`, `packages/shared`, CI. Findings below were checke
 - Concurrent status update on one version returns one 200 and one 409 — **Fixed** in `cd1ff53`.
 - Concurrent import, 200-row cap, quoted newline, and `1e2` — **Fixed** in `aafe100`, `0927af3`, and `cd1ff53`.
 - Web refresh-on-401 and grid error/queue — **Fixed** in `2241fb9` and `cd1ff53`.
-- Defaulters boundary at `toExclusive` — **Deferred**. The test is in the uncommitted defaulters suite (`apps/api/src/defaulters/defaulters.routes.test.ts`) and passed locally. Those feature files were left uncommitted so this review did not land the defaulters feature.
+- Defaulters boundary at `toExclusive` — **Fixed** in Step 7 (`feat(defaulters)` commit). Covered by `apps/api/src/defaulters/defaulters.routes.test.ts`.
 
 ## Summary
 
@@ -52,6 +52,6 @@ Scope: `apps/api`, `apps/web`, `packages/shared`, CI. Findings below were checke
 | d | 4, 5, 6, 7 | `56cba74` | Fixed |
 | e | 8, 9, 10 | `aafe100` | Fixed |
 | f | 13–19 | `0927af3` | Fixed |
-| g | test gaps | `cd1ff53` | Fixed, except the defaulters boundary test (Deferred) |
+| g | test gaps | `cd1ff53` + Step 7 | Fixed |
 
 New dependencies, both in `56cba74`: `@fastify/helmet` and `@fastify/rate-limit`. They provide response headers and a login budget without a hand-rolled limiter.

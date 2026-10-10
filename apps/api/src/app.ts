@@ -11,6 +11,7 @@ import { AuthError } from "./auth/auth.service.js";
 import { authRoutes } from "./auth/auth.routes.js";
 import { classRoutes } from "./classes/class.routes.js";
 import { prisma } from "./db.js";
+import { defaultersRoutes } from "./defaulters/defaulters.routes.js";
 import { HttpError } from "./errors.js";
 import { taskRoutes } from "./tasks/task.routes.js";
 import { statusRoutes } from "./tasks/status.routes.js";
@@ -84,6 +85,7 @@ export async function buildApp(options?: {
   await app.register(classRoutes);
   await app.register(taskRoutes);
   await app.register(statusRoutes);
+  await app.register(defaultersRoutes);
 
   return app;
 }

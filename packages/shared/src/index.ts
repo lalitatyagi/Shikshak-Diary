@@ -43,8 +43,20 @@ export {
   kolkataCalendarDateToInstant,
   parseToKolkataCalendarDate,
   startOfTodayKolkata,
+  addKolkataCalendarDays,
+  defaultersWindow,
   isPastDueInKolkata,
 } from "./dates.js";
+export {
+  DEFAULT_DEFAULTERS_DAYS,
+  DEFAULT_MIN_MISSES,
+  defaultersQuerySchema,
+  defaulterRowSchema,
+  defaultersResponseSchema,
+  type DefaultersQuery,
+  type DefaulterRow,
+  type DefaultersResponse,
+} from "./defaulters.js";
 export {
   v1CreateTaskTypeSchema,
   createTaskBodySchema,
