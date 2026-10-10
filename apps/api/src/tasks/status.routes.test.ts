@@ -156,6 +156,61 @@ describe("tick grid status routes", () => {
     expect(audit).toBeTruthy();
   });
 
+  it("stores marks on a WEEKLY_TEST and rejects scores above maxMarks", async () => {
+    const today = toKolkataCalendarDate(new Date());
+    const created = await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        subjectId,
+        type: "WEEKLY_TEST",
+        title: "Ch1 test",
+        assignedOn: today,
+        dueOn: today,
+        maxMarks: 10,
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const taskId = (created.json() as { id: string }).id;
+
+    const grid = (
+      await app.inject({
+        method: "GET",
+        url: `/classes/${classId}/grid`,
+        headers: { authorization: `Bearer ${accessToken}` },
+      })
+    ).json() as {
+      tasks: Array<{ id: string; maxMarks: number | null }>;
+      statuses: Array<{
+        id: string;
+        taskId: string;
+        version: number;
+        marks: number | null;
+      }>;
+    };
+    const task = grid.tasks.find((row) => row.id === taskId);
+    expect(task?.maxMarks).toBe(10);
+    const cell = grid.statuses.find((row) => row.taskId === taskId)!;
+
+    const tooHigh = await app.inject({
+      method: "PUT",
+      url: `/task-statuses/${cell.id}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { status: "DONE", version: cell.version, marks: 11 },
+    });
+    expect(tooHigh.statusCode).toBe(400);
+
+    const ok = await app.inject({
+      method: "PUT",
+      url: `/task-statuses/${cell.id}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { status: "DONE", version: cell.version, marks: 8 },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ status: "DONE", marks: 8 });
+  });
+
   it("rejects stale version on PUT", async () => {
     const grid = (
       await app.inject({
@@ -192,12 +247,19 @@ describe("tick grid status routes", () => {
       })
     ).json() as {
       tasks: Array<{ id: string }>;
-      statuses: Array<{ id: string; version: number; studentId: string }>;
+      statuses: Array<{
+        id: string;
+        taskId: string;
+        version: number;
+        studentId: string;
+      }>;
     };
 
     const taskId = grid.tasks[0]!.id;
-    const keep = grid.statuses[0]!;
-    const pending = grid.statuses[1]!;
+    const forTask = grid.statuses.filter((row) => row.taskId === taskId);
+    const keep = forTask[0]!;
+    const pending = forTask[1]!;
+    expect(forTask.length).toBeGreaterThanOrEqual(2);
 
     await prisma.taskStatus.update({
       where: { id: keep.id },

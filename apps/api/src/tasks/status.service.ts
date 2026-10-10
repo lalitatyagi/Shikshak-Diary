@@ -5,6 +5,7 @@ import {
   isStatusAllowedForType,
   taskStatusSchema,
   toKolkataCalendarDate,
+  validateMarksAndParts,
   type BulkCompleteResult,
   type ClassGridDto,
   type Role,
@@ -102,6 +103,8 @@ export async function getClassGrid(
       type: task.type,
       assignedOn: toKolkataCalendarDate(task.assignedOn),
       dueOn: toKolkataCalendarDate(task.dueOn),
+      maxMarks: task.maxMarks,
+      totalParts: task.totalParts,
     })),
     statuses: statuses.map((status) => toStatusDto(status)),
   });
@@ -113,6 +116,8 @@ export async function updateTaskStatus(
   role: Role,
   status: StatusValue,
   expectedVersion: number,
+  marks?: number | null,
+  partsDone?: number | null,
 ): Promise<TaskStatusDto> {
   const existing = await prisma.taskStatus.findUnique({
     where: { id: statusId },
@@ -131,6 +136,20 @@ export async function updateTaskStatus(
     );
   }
 
+  const nextMarks = marks !== undefined ? marks : existing.marks;
+  const nextPartsDone =
+    partsDone !== undefined ? partsDone : existing.partsDone;
+  const fieldError = validateMarksAndParts({
+    type: existing.task.type,
+    maxMarks: existing.task.maxMarks,
+    totalParts: existing.task.totalParts,
+    marks: nextMarks,
+    partsDone: nextPartsDone,
+  });
+  if (fieldError) {
+    throw new HttpError(fieldError, 400);
+  }
+
   if (existing.version !== expectedVersion) {
     throw new HttpError(
       "Status was updated elsewhere — refresh and retry",
@@ -145,6 +164,8 @@ export async function updateTaskStatus(
     },
     data: {
       status,
+      marks: nextMarks,
+      partsDone: nextPartsDone,
       version: { increment: 1 },
       updatedById: userId,
     },
@@ -165,8 +186,18 @@ export async function updateTaskStatus(
     entity: "TaskStatus",
     entityId: updated.id,
     action: "update",
-    before: { status: existing.status, version: existing.version },
-    after: { status: updated.status, version: updated.version },
+    before: {
+      status: existing.status,
+      version: existing.version,
+      marks: existing.marks,
+      partsDone: existing.partsDone,
+    },
+    after: {
+      status: updated.status,
+      version: updated.version,
+      marks: updated.marks,
+      partsDone: updated.partsDone,
+    },
   });
   return toStatusDto(updated);
 }

@@ -113,8 +113,10 @@ export async function createTaskForClass(
         description: input.description,
         assignedOn,
         dueOn,
-        maxMarks: null,
-        totalParts: null,
+        maxMarks:
+          input.type === "WEEKLY_TEST" ? (input.maxMarks ?? null) : null,
+        totalParts:
+          input.type === "HOLIDAY_HOMEWORK" ? (input.totalParts ?? null) : null,
       },
     });
 

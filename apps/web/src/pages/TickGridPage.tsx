@@ -36,6 +36,23 @@ function statusLabel(status: StatusValue): string {
   }
 }
 
+function cellLabel(
+  task: ClassGridDto["tasks"][number],
+  cell: TaskStatusDto,
+): string {
+  if (task.type === "WEEKLY_TEST") {
+    if (cell.marks != null) {
+      return `${cell.marks}/${task.maxMarks ?? "?"}`;
+    }
+    return statusLabel(cell.status);
+  }
+  if (task.type === "HOLIDAY_HOMEWORK") {
+    const parts = cell.partsDone ?? 0;
+    return `${parts}/${task.totalParts ?? "?"}`;
+  }
+  return statusLabel(cell.status);
+}
+
 function statusClass(status: StatusValue): string {
   switch (status) {
     case "DONE":
@@ -80,9 +97,9 @@ export function TickGridPage() {
 
   const [showNewTask, setShowNewTask] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  const [newType, setNewType] = useState<"DAILY_HOMEWORK" | "NOTEBOOK_CHECK">(
-    "DAILY_HOMEWORK",
-  );
+  const [newType, setNewType] = useState<TaskType>("DAILY_HOMEWORK");
+  const [newMaxMarks, setNewMaxMarks] = useState("20");
+  const [newTotalParts, setNewTotalParts] = useState("5");
   const [newDueOn, setNewDueOn] = useState(() =>
     toKolkataCalendarDate(new Date()),
   );
@@ -104,6 +121,7 @@ export function TickGridPage() {
   function enqueueStatusUpdate(
     statusId: string,
     next: StatusValue,
+    extras?: { marks?: number | null; partsDone?: number | null },
   ): Promise<void> {
     const prior = queuesRef.current.get(statusId) ?? Promise.resolve();
     const job = prior
@@ -122,7 +140,17 @@ export function TickGridPage() {
             ...old,
             statuses: old.statuses.map((row) =>
               row.id === statusId
-                ? { ...row, status: next, version: row.version + 1 }
+                ? {
+                    ...row,
+                    status: next,
+                    version: row.version + 1,
+                    marks:
+                      extras && "marks" in extras ? extras.marks : row.marks,
+                    partsDone:
+                      extras && "partsDone" in extras
+                        ? extras.partsDone
+                        : row.partsDone,
+                  }
                 : row,
             ),
           };
@@ -133,7 +161,11 @@ export function TickGridPage() {
             `/task-statuses/${statusId}`,
             {
               method: "PUT",
-              body: JSON.stringify({ status: next, version: cell.version }),
+              body: JSON.stringify({
+                status: next,
+                version: cell.version,
+                ...extras,
+              }),
             },
           );
           queryClient.setQueryData<ClassGridDto>(queryKey, (old) => {
@@ -171,6 +203,9 @@ export function TickGridPage() {
         title: newTitle.trim(),
         assignedOn: newDueOn,
         dueOn: newDueOn,
+        maxMarks: newType === "WEEKLY_TEST" ? Number(newMaxMarks) : undefined,
+        totalParts:
+          newType === "HOLIDAY_HOMEWORK" ? Number(newTotalParts) : undefined,
       });
       return taskSchema.parse(
         await apiFetch(`/classes/${classId}/tasks`, {
@@ -264,16 +299,42 @@ export function TickGridPage() {
             <select
               className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3"
               value={newType}
-              onChange={(e) =>
-                setNewType(
-                  e.target.value as "DAILY_HOMEWORK" | "NOTEBOOK_CHECK",
-                )
-              }
+              onChange={(e) => setNewType(e.target.value as TaskType)}
             >
               <option value="DAILY_HOMEWORK">Homework</option>
               <option value="NOTEBOOK_CHECK">Notebook check</option>
+              <option value="WEEKLY_TEST">Weekly test</option>
+              <option value="HOLIDAY_HOMEWORK">Holiday homework</option>
             </select>
           </label>
+          {newType === "WEEKLY_TEST" && (
+            <label className="block text-sm">
+              <span className="text-[var(--muted)]">Max marks</span>
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                required
+                className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3"
+                value={newMaxMarks}
+                onChange={(e) => setNewMaxMarks(e.target.value)}
+              />
+            </label>
+          )}
+          {newType === "HOLIDAY_HOMEWORK" && (
+            <label className="block text-sm">
+              <span className="text-[var(--muted)]">Total parts</span>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                required
+                className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3"
+                value={newTotalParts}
+                onChange={(e) => setNewTotalParts(e.target.value)}
+              />
+            </label>
+          )}
           <label className="block text-sm">
             <span className="text-[var(--muted)]">Due date</span>
             <input
@@ -315,7 +376,7 @@ export function TickGridPage() {
 
       {grid && grid.tasks.length === 0 && (
         <p className="px-1 text-[var(--muted)]">
-          No tasks yet. Tap “+ New task” to add homework or a notebook check.
+          No tasks yet. Tap “+ New task” to add homework, a test, or a check.
         </p>
       )}
 
@@ -347,7 +408,18 @@ export function TickGridPage() {
                       key={task.id}
                       className="max-w-[5.5rem] px-1 py-3 text-center text-xs font-medium break-words"
                     >
-                      {task.title}
+                      <span className="block">{task.title}</span>
+                      {task.type === "WEEKLY_TEST" && task.maxMarks != null && (
+                        <span className="mt-0.5 block font-normal text-[var(--muted)]">
+                          /{task.maxMarks}
+                        </span>
+                      )}
+                      {task.type === "HOLIDAY_HOMEWORK" &&
+                        task.totalParts != null && (
+                          <span className="mt-0.5 block font-normal text-[var(--muted)]">
+                            {task.totalParts} parts
+                          </span>
+                        )}
                     </th>
                   ))}
                 </tr>
@@ -404,6 +476,40 @@ export function TickGridPage() {
                                 longPressFired.current = false;
                                 return;
                               }
+                              if (task.type === "WEEKLY_TEST") {
+                                const raw = globalThis.prompt(
+                                  `Marks out of ${task.maxMarks ?? "?"}`,
+                                  cell.marks != null ? String(cell.marks) : "",
+                                );
+                                if (raw == null) {
+                                  return;
+                                }
+                                const marks = Number(raw.trim());
+                                if (!Number.isInteger(marks)) {
+                                  setSaveError("Enter a whole-number mark.");
+                                  return;
+                                }
+                                void enqueueStatusUpdate(cell.id, "DONE", {
+                                  marks,
+                                });
+                                return;
+                              }
+                              if (task.type === "HOLIDAY_HOMEWORK") {
+                                const total = task.totalParts ?? 1;
+                                const current = cell.partsDone ?? 0;
+                                const partsDone =
+                                  current >= total ? 0 : current + 1;
+                                const nextStatus: StatusValue =
+                                  partsDone === 0
+                                    ? "PENDING"
+                                    : partsDone === total
+                                      ? "DONE"
+                                      : "INCOMPLETE";
+                                void enqueueStatusUpdate(cell.id, nextStatus, {
+                                  partsDone,
+                                });
+                                return;
+                              }
                               const next = primaryTapStatus(
                                 task.type,
                                 cell.status,
@@ -416,7 +522,7 @@ export function TickGridPage() {
                                 : "bg-slate-100 text-slate-400"
                             }`}
                           >
-                            {cell ? statusLabel(cell.status) : "?"}
+                            {cell ? cellLabel(task, cell) : "?"}
                           </button>
                         </td>
                       );
@@ -427,7 +533,8 @@ export function TickGridPage() {
             </table>
           </div>
           <p className="mt-3 px-1 text-xs text-[var(--muted)]">
-            Tap: done ↔ not done. Long-press: incomplete / absent.
+            Tap: homework done ↔ not done; test asks for marks; holiday advances
+            parts. Long-press: incomplete / absent.
           </p>
         </>
       )}

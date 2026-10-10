@@ -175,7 +175,7 @@ describe("task routes", () => {
     expect(pendingCount).toBe(3);
   });
 
-  it("rejects V2 task types and maxMarks on V1 create", async () => {
+  it("creates WEEKLY_TEST and HOLIDAY_HOMEWORK with typed fields", async () => {
     const weekly = await app.inject({
       method: "POST",
       url: `/classes/${classId}/tasks`,
@@ -189,7 +189,33 @@ describe("task routes", () => {
         maxMarks: 20,
       },
     });
-    expect(weekly.statusCode).toBe(400);
+    expect(weekly.statusCode).toBe(201);
+    expect(weekly.json()).toMatchObject({
+      type: "WEEKLY_TEST",
+      maxMarks: 20,
+      totalParts: null,
+      statusCount: 3,
+    });
+
+    const holiday = await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        subjectId,
+        type: "HOLIDAY_HOMEWORK",
+        title: "Holiday pack",
+        assignedOn: "2026-10-03",
+        dueOn: "2026-10-10",
+        totalParts: 5,
+      },
+    });
+    expect(holiday.statusCode).toBe(201);
+    expect(holiday.json()).toMatchObject({
+      type: "HOLIDAY_HOMEWORK",
+      maxMarks: null,
+      totalParts: 5,
+    });
 
     const withMarks = await app.inject({
       method: "POST",

@@ -62,6 +62,7 @@ export {
   createTaskBodySchema,
   calendarDateSchema,
   taskSchema,
+  validateMarksAndParts,
   type CreateTaskBody,
   type TaskDto,
 } from "./tasks.js";

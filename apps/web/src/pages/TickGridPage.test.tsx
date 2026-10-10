@@ -39,6 +39,8 @@ const grid = {
       type: "DAILY_HOMEWORK",
       assignedOn: "2026-10-03",
       dueOn: "2026-10-03",
+      maxMarks: null,
+      totalParts: null,
     },
   ],
   statuses: [

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { taskTypeSchema } from "./enums.js";
+import { taskTypeSchema, type TaskType } from "./enums.js";
 import { isCalendarDateString, parseToKolkataCalendarDate } from "./dates.js";
 
 /** YYYY-MM-DD calendar date (Asia/Kolkata). Also accepts ISO datetimes and normalizes. */
@@ -23,7 +23,7 @@ export const calendarDateSchema = z.string().transform((value, ctx) => {
   }
 });
 
-/** V1 create API only allows these two types. */
+/** @deprecated Use taskTypeSchema — all four types are creatable in V2. */
 export const v1CreateTaskTypeSchema = z.enum([
   "DAILY_HOMEWORK",
   "NOTEBOOK_CHECK",
@@ -32,28 +32,60 @@ export const v1CreateTaskTypeSchema = z.enum([
 export const createTaskBodySchema = z
   .object({
     subjectId: z.string().min(1),
-    type: v1CreateTaskTypeSchema,
+    type: taskTypeSchema,
     title: z.string().trim().min(1).max(200),
     description: z.string().max(2000).optional().default(""),
     assignedOn: calendarDateSchema,
     dueOn: calendarDateSchema,
-    maxMarks: z.number().optional().nullable(),
-    totalParts: z.number().optional().nullable(),
+    maxMarks: z.number().int().min(1).max(1000).optional().nullable(),
+    totalParts: z.number().int().min(1).max(100).optional().nullable(),
   })
   .superRefine((data, ctx) => {
-    if (data.maxMarks != null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["maxMarks"],
-        message: "maxMarks is only allowed for WEEKLY_TEST (V2)",
-      });
-    }
-    if (data.totalParts != null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["totalParts"],
-        message: "totalParts is only allowed for HOLIDAY_HOMEWORK (V2)",
-      });
+    if (data.type === "WEEKLY_TEST") {
+      if (data.maxMarks == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["maxMarks"],
+          message: "maxMarks is required for WEEKLY_TEST",
+        });
+      }
+      if (data.totalParts != null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["totalParts"],
+          message: "totalParts is only allowed for HOLIDAY_HOMEWORK",
+        });
+      }
+    } else if (data.type === "HOLIDAY_HOMEWORK") {
+      if (data.totalParts == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["totalParts"],
+          message: "totalParts is required for HOLIDAY_HOMEWORK",
+        });
+      }
+      if (data.maxMarks != null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["maxMarks"],
+          message: "maxMarks is only allowed for WEEKLY_TEST",
+        });
+      }
+    } else {
+      if (data.maxMarks != null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["maxMarks"],
+          message: "maxMarks is only allowed for WEEKLY_TEST",
+        });
+      }
+      if (data.totalParts != null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["totalParts"],
+          message: "totalParts is only allowed for HOLIDAY_HOMEWORK",
+        });
+      }
     }
 
     if (data.dueOn < data.assignedOn) {
@@ -80,6 +112,59 @@ export const taskSchema = z.object({
   createdAt: z.string().datetime(),
   statusCount: z.number().int().nonnegative(),
 });
+
+/**
+ * Type-specific marks / partsDone rules from the product data model.
+ * Returns an error message, or null when valid.
+ */
+export function validateMarksAndParts(input: {
+  type: TaskType;
+  maxMarks: number | null;
+  totalParts: number | null;
+  marks?: number | null;
+  partsDone?: number | null;
+}): string | null {
+  const marks = input.marks;
+  const partsDone = input.partsDone;
+
+  if (input.type === "WEEKLY_TEST") {
+    if (partsDone != null) {
+      return "partsDone is only allowed for HOLIDAY_HOMEWORK";
+    }
+    if (marks != null) {
+      if (!Number.isInteger(marks) || marks < 0) {
+        return "marks must be a non-negative integer";
+      }
+      if (input.maxMarks == null || marks > input.maxMarks) {
+        return `marks must be between 0 and ${input.maxMarks ?? 0}`;
+      }
+    }
+    return null;
+  }
+
+  if (input.type === "HOLIDAY_HOMEWORK") {
+    if (marks != null) {
+      return "marks is only allowed for WEEKLY_TEST";
+    }
+    if (partsDone != null) {
+      if (!Number.isInteger(partsDone) || partsDone < 0) {
+        return "partsDone must be a non-negative integer";
+      }
+      if (input.totalParts == null || partsDone > input.totalParts) {
+        return `partsDone must be between 0 and ${input.totalParts ?? 0}`;
+      }
+    }
+    return null;
+  }
+
+  if (marks != null) {
+    return "marks is only allowed for WEEKLY_TEST";
+  }
+  if (partsDone != null) {
+    return "partsDone is only allowed for HOLIDAY_HOMEWORK";
+  }
+  return null;
+}
 
 export type CreateTaskBody = z.infer<typeof createTaskBodySchema>;
 export type TaskDto = z.infer<typeof taskSchema>;

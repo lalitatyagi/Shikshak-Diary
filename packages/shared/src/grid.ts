@@ -20,6 +20,8 @@ export const cycleStatusBodySchema = z.object({
 export const updateStatusBodySchema = z.object({
   status: statusValueSchema,
   version: z.number().int().positive(),
+  marks: z.number().int().nonnegative().nullable().optional(),
+  partsDone: z.number().int().nonnegative().nullable().optional(),
 });
 
 export const gridTaskSchema = z.object({
@@ -28,6 +30,8 @@ export const gridTaskSchema = z.object({
   type: taskTypeSchema,
   assignedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  maxMarks: z.number().int().nullable(),
+  totalParts: z.number().int().nullable(),
 });
 
 export const classGridSchema = z.object({

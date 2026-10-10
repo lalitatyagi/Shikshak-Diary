@@ -56,6 +56,8 @@ export async function statusRoutes(app: FastifyInstance): Promise<void> {
           request.authUser!.role,
           parsed.data.status,
           parsed.data.version,
+          parsed.data.marks,
+          parsed.data.partsDone,
         );
         return reply.send(taskStatusSchema.parse(status));
       } catch (error) {

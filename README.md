@@ -8,8 +8,9 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**Step 8 complete:** deploy config for Neon (Postgres) + Render (API) + Vercel (web).
-See [docs/DEPLOY.md](docs/DEPLOY.md) for the checklist.
+**V2 Step 1 complete:** weekly tests (marks / maxMarks) and holiday homework
+(partsDone / totalParts) on the same Task model. See [docs/DEPLOY.md](docs/DEPLOY.md)
+for optional deploy later.
 
 Live demo: _set URLs after first deploy_  
 - Web: `https://<your-app>.vercel.app`  
@@ -61,8 +62,9 @@ Example body:
 | GET | `/classes/:classId/tasks` | List tasks for a class |
 | GET | `/tasks/:taskId` | Task detail with `statusCount` |
 
-V1 create types: `DAILY_HOMEWORK`, `NOTEBOOK_CHECK` only.  
-`maxMarks` / `totalParts` are rejected until V2.  
+Create types: `DAILY_HOMEWORK`, `NOTEBOOK_CHECK`, `WEEKLY_TEST` (requires `maxMarks`),
+`HOLIDAY_HOMEWORK` (requires `totalParts`).  
+`PUT /task-statuses/:id` accepts optional `marks` / `partsDone` (type-checked).  
 `assignedOn` / `dueOn` are **Asia/Kolkata calendar dates** (`YYYY-MM-DD`).  
 Late student imports get `PENDING` rows for open (not past-due) tasks.
 
@@ -121,6 +123,7 @@ Deploy runbook: [docs/DEPLOY.md](docs/DEPLOY.md) (`render.yaml`, `vercel.json`).
 | Optimistic status cycle + version check | Feels instant on a phone; 409 if another update won | Needs refresh/invalidate after conflicts |
 | SQL aggregation for defaulters | One query with `HAVING COUNT(*) >= 2`; cheap for ~40 students | Miss criteria are status-based, not “late relative to due date” yet |
 | Split deploy (Vercel + Render + Neon) | Matches each piece’s strengths; free tiers for a portfolio demo | Cross-origin cookies need SameSite=None; Render free tier cold-starts |
+| Typed fields on one Task / TaskStatus | Weekly tests and holiday parts reuse the same tables | App validation must stay strict per type |
 
 ## Prerequisites
 
