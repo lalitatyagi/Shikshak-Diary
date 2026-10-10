@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { loadEnv } from "../load-env.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import {
+  refreshCookieOptions,
   signAccessToken,
   signRefreshToken,
   verifyAccessToken,
@@ -19,6 +20,55 @@ describe("password hashing", () => {
     expect(hash).not.toBe("Teacher123!");
     expect(await verifyPassword("Teacher123!", hash)).toBe(true);
     expect(await verifyPassword("wrong-password", hash)).toBe(false);
+  });
+});
+
+describe("refresh cookie options", () => {
+  it("uses path / and SameSite=None in production", () => {
+    const previousEnv = process.env.NODE_ENV;
+    const previousSameSite = process.env.COOKIE_SAMESITE;
+    const previousSecure = process.env.COOKIE_SECURE;
+    process.env.NODE_ENV = "production";
+    delete process.env.COOKIE_SAMESITE;
+    delete process.env.COOKIE_SECURE;
+    try {
+      expect(refreshCookieOptions()).toMatchObject({
+        path: "/",
+        sameSite: "none",
+        secure: true,
+        httpOnly: true,
+      });
+    } finally {
+      process.env.NODE_ENV = previousEnv;
+      if (previousSameSite === undefined) {
+        delete process.env.COOKIE_SAMESITE;
+      } else {
+        process.env.COOKIE_SAMESITE = previousSameSite;
+      }
+      if (previousSecure === undefined) {
+        delete process.env.COOKIE_SECURE;
+      } else {
+        process.env.COOKIE_SECURE = previousSecure;
+      }
+    }
+  });
+
+  it("defaults to SameSite=Lax outside production", () => {
+    const previousEnv = process.env.NODE_ENV;
+    const previousSameSite = process.env.COOKIE_SAMESITE;
+    process.env.NODE_ENV = "test";
+    delete process.env.COOKIE_SAMESITE;
+    try {
+      expect(refreshCookieOptions().sameSite).toBe("lax");
+      expect(refreshCookieOptions().path).toBe("/");
+    } finally {
+      process.env.NODE_ENV = previousEnv;
+      if (previousSameSite === undefined) {
+        delete process.env.COOKIE_SAMESITE;
+      } else {
+        process.env.COOKIE_SAMESITE = previousSameSite;
+      }
+    }
   });
 });
 

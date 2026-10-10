@@ -156,18 +156,40 @@ function parseAccessPayload(payload: JWTPayload): AccessTokenPayload {
   };
 }
 
+export type RefreshCookieSameSite = "lax" | "strict" | "none";
+
+/**
+ * Refresh cookie for browser sessions.
+ * Path is `/` so the cookie is sent on Vite's `/api/*` proxy and on a
+ * cross-origin API host. Production defaults to SameSite=None + Secure so a
+ * Vercel web origin can call a Render/Railway API with credentials.
+ */
 export function refreshCookieOptions(): {
   httpOnly: boolean;
   path: string;
-  sameSite: "lax";
+  sameSite: RefreshCookieSameSite;
   secure: boolean;
   maxAge: number;
 } {
+  const sameSite = refreshCookieSameSite();
+  const secure =
+    process.env.COOKIE_SECURE === "true" ||
+    sameSite === "none" ||
+    process.env.NODE_ENV === "production";
+
   return {
     httpOnly: true,
-    path: "/auth",
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    sameSite,
+    secure,
     maxAge: refreshTtlSeconds(),
   };
+}
+
+function refreshCookieSameSite(): RefreshCookieSameSite {
+  const raw = (process.env.COOKIE_SAMESITE ?? "").trim().toLowerCase();
+  if (raw === "none" || raw === "lax" || raw === "strict") {
+    return raw;
+  }
+  return process.env.NODE_ENV === "production" ? "none" : "lax";
 }

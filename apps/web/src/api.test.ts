@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  apiBaseUrl,
   apiFetch,
   clearAccessToken,
   getAccessToken,
@@ -18,6 +19,12 @@ function jsonResponse(status: number, body: unknown): Response {
     headers: { "Content-Type": "application/json" },
   });
 }
+
+describe("apiBaseUrl", () => {
+  it("defaults to the Vite /api proxy path", () => {
+    expect(apiBaseUrl()).toBe("/api");
+  });
+});
 
 describe("apiFetch refresh on 401", () => {
   it("refreshes once and retries the original request with the new token", async () => {

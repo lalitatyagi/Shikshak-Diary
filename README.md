@@ -8,14 +8,17 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**Step 7 complete:** defaulters view — students with 2+ NOT_DONE / NOT_CHECKED
-in the last N days (Kolkata calendar window), plus tick-grid create-task UX.
+**Step 8 complete:** deploy config for Neon (Postgres) + Render (API) + Vercel (web).
+See [docs/DEPLOY.md](docs/DEPLOY.md) for the checklist.
 
-Live demo: _not deployed yet_  
-Demo teacher login (after `npm run db:seed`):
+Live demo: _set URLs after first deploy_  
+- Web: `https://<your-app>.vercel.app`  
+- API health: `https://<your-api>.onrender.com/health`
+
+Demo teacher login (after `npm run db:seed` against Neon):
 
 - Email: `teacher@demo.local`
-- Password: `Teacher123!` (local demo only — `npm run db:seed` refuses to run when `NODE_ENV` is `production`)
+- Password: `Teacher123!` (local/demo seed only — `npm run db:seed` refuses to run when `NODE_ENV` is `production`)
 
 ## Auth API
 
@@ -91,15 +94,17 @@ Open http://localhost:5173 → sign in → pick a class → tick grid or default
 ## Architecture (current)
 
 ```
-apps/web  (React + Vite)
+apps/web  (React + Vite)  →  Vercel
+    |  VITE_API_BASE_URL + credentials
+    v
+apps/api  (Fastify + Prisma + JWT auth)  →  Render
     |
     v
-apps/api  (Fastify + Prisma + JWT auth)
-    |
-    v
-PostgreSQL  (Neon or Docker Compose)
+PostgreSQL  →  Neon  (Docker Compose for local)
 packages/shared  (Zod schemas + enums shared by web + api)
 ```
+
+Deploy runbook: [docs/DEPLOY.md](docs/DEPLOY.md) (`render.yaml`, `vercel.json`).
 
 ## Design decisions so far
 
@@ -115,6 +120,7 @@ packages/shared  (Zod schemas + enums shared by web + api)
 | Task + statuses created in one transaction | No task without a full PENDING grid for the class | Large classes = bigger write; still fine for ~40 students |
 | Optimistic status cycle + version check | Feels instant on a phone; 409 if another update won | Needs refresh/invalidate after conflicts |
 | SQL aggregation for defaulters | One query with `HAVING COUNT(*) >= 2`; cheap for ~40 students | Miss criteria are status-based, not “late relative to due date” yet |
+| Split deploy (Vercel + Render + Neon) | Matches each piece’s strengths; free tiers for a portfolio demo | Cross-origin cookies need SameSite=None; Render free tier cold-starts |
 
 ## Prerequisites
 

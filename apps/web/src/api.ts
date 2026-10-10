@@ -4,6 +4,22 @@ const TOKEN_KEY = "ct_access_token";
 
 let refreshInFlight: Promise<boolean> | null = null;
 
+/**
+ * API base URL. Empty `VITE_API_BASE_URL` keeps the Vite `/api` proxy for local
+ * dev. Production sets this to the Render/Railway origin (no trailing slash).
+ */
+export function apiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (configured && configured.length > 0) {
+    return configured.replace(/\/$/, "");
+  }
+  return "/api";
+}
+
+function apiUrl(path: string): string {
+  return `${apiBaseUrl()}${path}`;
+}
+
 export function getAccessToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY);
 }
@@ -42,7 +58,7 @@ function sendToLogin(): void {
 }
 
 async function performRefresh(): Promise<boolean> {
-  const response = await fetch("/api/auth/refresh", {
+  const response = await fetch(apiUrl("/auth/refresh"), {
     method: "POST",
     credentials: "include",
   });
@@ -87,7 +103,7 @@ export async function apiFetch<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...init,
     headers,
     credentials: "include",

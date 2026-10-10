@@ -29,6 +29,8 @@ export async function buildApp(options?: {
 }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options?.logger ?? true,
+    // Render/Railway terminate TLS; needed for secure cookies and client IP.
+    trustProxy: true,
   });
 
   await app.register(helmet);
