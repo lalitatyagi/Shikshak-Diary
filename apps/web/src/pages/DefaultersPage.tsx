@@ -99,6 +99,12 @@ export function DefaultersPage() {
                     {row.taskTitles.join(" · ")}
                   </p>
                 )}
+                <Link
+                  to={`/classes/${classId}/students/${row.student.id}/report`}
+                  className="mt-2 inline-block text-sm text-[var(--accent)] underline"
+                >
+                  View report
+                </Link>
               </div>
               <span className="shrink-0 rounded-lg bg-red-700 px-2 py-1 text-sm font-semibold text-white">
                 {row.missCount}

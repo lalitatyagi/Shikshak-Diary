@@ -60,9 +60,15 @@ export function ClassesPage() {
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Link
                 to={`/classes/${classroom.id}/grid`}
-                className="flex min-h-11 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-medium text-white"
+                className="col-span-2 flex min-h-11 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-medium text-white"
               >
                 Tick grid
+              </Link>
+              <Link
+                to={`/classes/${classroom.id}/students`}
+                className="flex min-h-11 items-center justify-center rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+              >
+                Students
               </Link>
               <Link
                 to={`/classes/${classroom.id}/defaulters`}

@@ -58,6 +58,17 @@ export {
   type DefaultersResponse,
 } from "./defaulters.js";
 export {
+  DEFAULT_REPORT_DAYS,
+  studentReportQuerySchema,
+  studentReportTaskSchema,
+  studentReportSummarySchema,
+  studentReportSchema,
+  type StudentReportQuery,
+  type StudentReportTask,
+  type StudentReportSummary,
+  type StudentReport,
+} from "./report.js";
+export {
   v1CreateTaskTypeSchema,
   createTaskBodySchema,
   calendarDateSchema,

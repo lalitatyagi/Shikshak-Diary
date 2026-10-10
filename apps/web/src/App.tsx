@@ -4,6 +4,8 @@ import { LoginPage } from "./pages/LoginPage";
 import { ClassesPage } from "./pages/ClassesPage";
 import { TickGridPage } from "./pages/TickGridPage";
 import { DefaultersPage } from "./pages/DefaultersPage";
+import { StudentsPage } from "./pages/StudentsPage";
+import { StudentReportPage } from "./pages/StudentReportPage";
 import { HealthPage } from "./pages/HealthPage";
 import type { ReactNode } from "react";
 
@@ -49,6 +51,22 @@ export function App() {
           element={
             <Protected>
               <DefaultersPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/classes/:classId/students"
+          element={
+            <Protected>
+              <StudentsPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/classes/:classId/students/:studentId/report"
+          element={
+            <Protected>
+              <StudentReportPage />
             </Protected>
           }
         />

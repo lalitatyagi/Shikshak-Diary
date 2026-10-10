@@ -13,6 +13,7 @@ import { classRoutes } from "./classes/class.routes.js";
 import { prisma } from "./db.js";
 import { defaultersRoutes } from "./defaulters/defaulters.routes.js";
 import { HttpError } from "./errors.js";
+import { reportRoutes } from "./reports/report.routes.js";
 import { taskRoutes } from "./tasks/task.routes.js";
 import { statusRoutes } from "./tasks/status.routes.js";
 
@@ -88,6 +89,7 @@ export async function buildApp(options?: {
   await app.register(taskRoutes);
   await app.register(statusRoutes);
   await app.register(defaultersRoutes);
+  await app.register(reportRoutes);
 
   return app;
 }
