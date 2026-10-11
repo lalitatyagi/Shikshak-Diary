@@ -45,6 +45,7 @@ model User {
   schoolMemberships  SchoolMember[]
   refreshTokens      RefreshToken[]
   auditLogs          AuditLog[]
+  parentLinks        ParentLink[]
 }
 
 model School {
@@ -80,6 +81,7 @@ model Class {
   enrollments          Enrollment[]
   tasks                Task[]
   teacherAssignments   TeacherClassSubject[]
+  parentLinks          ParentLink[]
 
   @@unique([schoolId, name, academicYear])
   @@index([schoolId])
@@ -122,6 +124,7 @@ model Student {
   school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   enrollments Enrollment[]
   statuses    TaskStatus[]
+  parentLinks ParentLink[]
 
   @@unique([schoolId, rollNumber])
   @@index([schoolId])
@@ -181,6 +184,26 @@ model TaskStatus {
   @@unique([taskId, studentId])
   @@index([studentId])
   @@index([status])
+}
+
+/// Secret share link for a parent to view one student's report (raw token never stored).
+model ParentLink {
+  id          String    @id @default(cuid())
+  classId     String
+  studentId   String
+  tokenHash   String    @unique
+  createdById String
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  class     Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([classId, studentId])
+  @@index([studentId])
+  @@index([createdById])
 }
 
 /// Server-side refresh session. The cookie holds the raw JWT; only its hash is stored.

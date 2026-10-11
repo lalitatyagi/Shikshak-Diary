@@ -216,4 +216,18 @@ describe("report routes", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("downloads the report as CSV", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/classes/${classId}/students/${studentId}/report.csv?days=30`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/text\/csv/);
+    expect(res.headers["content-disposition"]).toMatch(/attachment/);
+    expect(res.body).toContain("rollNumber,name,");
+    expect(res.body).toContain("Unit quiz");
+    expect(res.body).toContain("17");
+  });
 });

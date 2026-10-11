@@ -22,18 +22,14 @@ function isNotDone(status: StatusValue): boolean {
 }
 
 /**
- * Per-student activity report for one class over the last N Kolkata days.
+ * Build a student report without auth. Caller must already authorize access.
  */
-export async function getStudentReport(
+export async function buildStudentReport(
   classId: string,
   studentId: string,
-  userId: string,
-  role: Role,
   days: number,
   now: Date = new Date(),
 ): Promise<StudentReport> {
-  await assertCanAccessClass(classId, userId, role);
-
   const enrollment = await prisma.enrollment.findUnique({
     where: { studentId_classId: { studentId, classId } },
     include: { student: true },
@@ -118,4 +114,19 @@ export async function getStudentReport(
       remark: row.remark,
     })),
   });
+}
+
+/**
+ * Per-student activity report for one class over the last N Kolkata days.
+ */
+export async function getStudentReport(
+  classId: string,
+  studentId: string,
+  userId: string,
+  role: Role,
+  days: number,
+  now: Date = new Date(),
+): Promise<StudentReport> {
+  await assertCanAccessClass(classId, userId, role);
+  return buildStudentReport(classId, studentId, days, now);
 }

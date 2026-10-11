@@ -6,6 +6,7 @@ import { TickGridPage } from "./pages/TickGridPage";
 import { DefaultersPage } from "./pages/DefaultersPage";
 import { StudentsPage } from "./pages/StudentsPage";
 import { StudentReportPage } from "./pages/StudentReportPage";
+import { ParentReportPage } from "./pages/ParentReportPage";
 import { HealthPage } from "./pages/HealthPage";
 import type { ReactNode } from "react";
 
@@ -30,6 +31,7 @@ export function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/health" element={<HealthPage />} />
+        <Route path="/p/:token" element={<ParentReportPage />} />
         <Route
           path="/"
           element={

@@ -18,3 +18,14 @@ body {
     linear-gradient(180deg, var(--bg) 0%, #e8eee9 100%);
   color: var(--ink);
 }
+
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

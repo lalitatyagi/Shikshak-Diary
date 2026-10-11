@@ -135,3 +135,79 @@ export async function apiFetch<T>(
 
   return data as T;
 }
+
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const match = /filename="([^"]+)"/i.exec(header);
+  return match?.[1] ?? null;
+}
+
+function triggerBrowserDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Authenticated file download (CSV, etc.). Retries once after refresh on 401.
+ */
+export async function apiDownload(
+  path: string,
+  fallbackFilename: string,
+  hasRetried = false,
+): Promise<void> {
+  const headers = new Headers();
+  const token = getAccessToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(apiUrl(path), {
+    headers,
+    credentials: "include",
+  });
+
+  if (response.status === 401 && !hasRetried && !isAuthEntryPath(path)) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      return apiDownload(path, fallbackFilename, true);
+    }
+  }
+
+  if (!response.ok) {
+    const data: unknown = await response.json().catch(() => ({}));
+    const message =
+      typeof data === "object" &&
+      data &&
+      "error" in data &&
+      typeof (data as { error: unknown }).error === "string"
+        ? (data as { error: string }).error
+        : `Download failed (${response.status})`;
+    throw new ApiError(message, response.status);
+  }
+
+  const blob = await response.blob();
+  const filename =
+    filenameFromDisposition(response.headers.get("Content-Disposition")) ??
+    fallbackFilename;
+  triggerBrowserDownload(blob, filename);
+}
+
+/** Unauthenticated download (parent share links). */
+export async function publicDownload(
+  path: string,
+  fallbackFilename: string,
+): Promise<void> {
+  const response = await fetch(apiUrl(path));
+  if (!response.ok) {
+    throw new ApiError(`Download failed (${response.status})`, response.status);
+  }
+  const blob = await response.blob();
+  const filename =
+    filenameFromDisposition(response.headers.get("Content-Disposition")) ??
+    fallbackFilename;
+  triggerBrowserDownload(blob, filename);
+}

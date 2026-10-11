@@ -1,16 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   DEFAULT_DEFAULTERS_DAYS,
   defaultersResponseSchema,
 } from "@classroom-tracker/shared";
-import { apiFetch } from "../api";
+import { apiDownload, apiFetch } from "../api";
 
 const DAY_OPTIONS = [7, 14, 30] as const;
 
 export function DefaultersPage() {
   const { classId = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [exportError, setExportError] = useState<string | null>(null);
   const daysParam = Number(searchParams.get("days"));
   const days =
     Number.isInteger(daysParam) && daysParam >= 1 && daysParam <= 90
@@ -29,7 +31,7 @@ export function DefaultersPage() {
   return (
     <main className="mx-auto min-h-screen max-w-lg px-4 py-6">
       <header className="mb-4">
-        <div className="flex items-center justify-between gap-2">
+        <div className="no-print flex items-center justify-between gap-2">
           <Link to="/" className="text-sm text-[var(--muted)] underline">
             ← Classes
           </Link>
@@ -50,7 +52,7 @@ export function DefaultersPage() {
         </p>
       </header>
 
-      <div className="mb-4 flex gap-2">
+      <div className="no-print mb-4 flex gap-2">
         {DAY_OPTIONS.map((option) => (
           <button
             key={option}
@@ -66,6 +68,34 @@ export function DefaultersPage() {
           </button>
         ))}
       </div>
+
+      <div className="no-print mb-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          disabled={!query.data}
+          onClick={() => {
+            setExportError(null);
+            void apiDownload(
+              `/classes/${classId}/defaulters.csv?days=${days}`,
+              "defaulters.csv",
+            ).catch(() => setExportError("Could not download CSV."));
+          }}
+          className="min-h-11 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)] disabled:opacity-40"
+        >
+          Download CSV
+        </button>
+        <button
+          type="button"
+          disabled={!query.data}
+          onClick={() => window.print()}
+          className="min-h-11 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)] disabled:opacity-40"
+        >
+          Print / PDF
+        </button>
+      </div>
+      {exportError && (
+        <p className="no-print mb-4 text-sm text-red-700">{exportError}</p>
+      )}
 
       {query.isPending && (
         <p className="text-[var(--muted)]">Loading defaulters…</p>

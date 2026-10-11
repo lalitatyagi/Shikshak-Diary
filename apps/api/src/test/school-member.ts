@@ -13,6 +13,7 @@ export async function deleteUsersByEmail(emails: string[]): Promise<void> {
   if (ids.length > 0) {
     await prisma.auditLog.deleteMany({ where: { userId: { in: ids } } });
     await prisma.refreshToken.deleteMany({ where: { userId: { in: ids } } });
+    await prisma.parentLink.deleteMany({ where: { createdById: { in: ids } } });
   }
   await prisma.user.deleteMany({
     where: { email: { in: emails.map((email) => email.toLowerCase()) } },

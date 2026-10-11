@@ -304,4 +304,16 @@ describe("defaulters routes", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("downloads defaulters as CSV", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/classes/${classId}/defaulters.csv?days=7`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/text\/csv/);
+    expect(res.body).toContain("rollNumber,name,missCount");
+    expect(res.body).toContain("One");
+  });
 });

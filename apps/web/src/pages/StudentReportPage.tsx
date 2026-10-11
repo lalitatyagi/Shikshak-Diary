@@ -1,39 +1,32 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   DEFAULT_REPORT_DAYS,
+  parentLinkCreatedSchema,
+  parentLinkStatusSchema,
   studentReportSchema,
-  type StudentReportTask,
 } from "@classroom-tracker/shared";
-import { apiFetch } from "../api";
+import { apiDownload, apiFetch } from "../api";
+import { StudentReportView } from "../components/StudentReportView";
 
 const DAY_OPTIONS = [7, 14, 30, 90] as const;
-
-function statusLabel(status: StudentReportTask["status"]): string {
-  return status.replaceAll("_", " ");
-}
-
-function taskDetail(task: StudentReportTask): string | null {
-  if (task.type === "WEEKLY_TEST" && task.marks != null) {
-    return `${task.marks}${task.maxMarks != null ? ` / ${task.maxMarks}` : ""}`;
-  }
-  if (task.type === "HOLIDAY_HOMEWORK" && task.partsDone != null) {
-    return `${task.partsDone}${task.totalParts != null ? ` / ${task.totalParts} parts` : " parts"}`;
-  }
-  if (task.remark) return task.remark;
-  return null;
-}
 
 export function StudentReportPage() {
   const { classId = "", studentId = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const [freshUrl, setFreshUrl] = useState<string | null>(null);
+  const [copyNote, setCopyNote] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
   const daysParam = Number(searchParams.get("days"));
   const days =
     Number.isInteger(daysParam) && daysParam >= 1 && daysParam <= 365
       ? daysParam
       : DEFAULT_REPORT_DAYS;
 
-  const query = useQuery({
+  const reportQuery = useQuery({
     queryKey: ["student-report", classId, studentId, days],
     enabled: Boolean(classId && studentId),
     queryFn: async () =>
@@ -44,12 +37,67 @@ export function StudentReportPage() {
       ),
   });
 
-  const summary = query.data?.summary;
+  const linkQuery = useQuery({
+    queryKey: ["parent-link", classId, studentId],
+    enabled: Boolean(classId && studentId),
+    queryFn: async () =>
+      parentLinkStatusSchema.parse(
+        await apiFetch<unknown>(
+          `/classes/${classId}/students/${studentId}/parent-link`,
+        ),
+      ),
+  });
+
+  const createLink = useMutation({
+    mutationFn: async () =>
+      parentLinkCreatedSchema.parse(
+        await apiFetch<unknown>(
+          `/classes/${classId}/students/${studentId}/parent-link`,
+          { method: "POST", body: JSON.stringify({}) },
+        ),
+      ),
+    onSuccess: (created) => {
+      const url = `${window.location.origin}${created.path}`;
+      setFreshUrl(url);
+      setCopyNote(null);
+      void queryClient.invalidateQueries({
+        queryKey: ["parent-link", classId, studentId],
+      });
+    },
+  });
+
+  const revokeLink = useMutation({
+    mutationFn: async () =>
+      parentLinkStatusSchema.parse(
+        await apiFetch<unknown>(
+          `/classes/${classId}/students/${studentId}/parent-link`,
+          { method: "DELETE" },
+        ),
+      ),
+    onSuccess: () => {
+      setFreshUrl(null);
+      setCopyNote(null);
+      void queryClient.invalidateQueries({
+        queryKey: ["parent-link", classId, studentId],
+      });
+    },
+  });
+
+  async function copyUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyNote("Copied");
+    } catch {
+      setCopyNote("Copy failed — select the link manually");
+    }
+  }
+
+  const linkActive = linkQuery.data?.link?.active === true;
 
   return (
     <main className="mx-auto min-h-screen max-w-lg px-4 py-6">
       <header className="mb-4">
-        <div className="flex items-center justify-between gap-2">
+        <div className="no-print flex items-center justify-between gap-2">
           <Link
             to={`/classes/${classId}/students`}
             className="text-sm text-[var(--muted)] underline"
@@ -64,20 +112,20 @@ export function StudentReportPage() {
           </Link>
         </div>
         <h1 className="mt-2 text-2xl font-semibold text-[var(--accent)]">
-          {query.data
-            ? `#${query.data.student.rollNumber} ${query.data.student.name}`
+          {reportQuery.data
+            ? `#${reportQuery.data.student.rollNumber} ${reportQuery.data.student.name}`
             : "Student report"}
         </h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           Last {days} days
-          {query.data
-            ? ` (${query.data.fromDate} → ${query.data.toDate})`
+          {reportQuery.data
+            ? ` (${reportQuery.data.fromDate} → ${reportQuery.data.toDate})`
             : ""}
           .
         </p>
       </header>
 
-      <div className="mb-4 flex gap-2">
+      <div className="no-print mb-4 flex gap-2">
         {DAY_OPTIONS.map((option) => (
           <button
             key={option}
@@ -94,80 +142,95 @@ export function StudentReportPage() {
         ))}
       </div>
 
-      {query.isPending && (
+      <div className="no-print mb-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          disabled={!reportQuery.data}
+          onClick={() => {
+            setExportError(null);
+            void apiDownload(
+              `/classes/${classId}/students/${studentId}/report.csv?days=${days}`,
+              `student-report.csv`,
+            ).catch(() => setExportError("Could not download CSV."));
+          }}
+          className="min-h-11 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)] disabled:opacity-40"
+        >
+          Download CSV
+        </button>
+        <button
+          type="button"
+          disabled={!reportQuery.data}
+          onClick={() => window.print()}
+          className="min-h-11 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)] disabled:opacity-40"
+        >
+          Print / PDF
+        </button>
+      </div>
+      {exportError && (
+        <p className="no-print mb-4 text-sm text-red-700">{exportError}</p>
+      )}
+
+      <section className="no-print mb-6 rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm">
+        <h2 className="text-sm font-semibold text-[var(--ink)]">
+          Parent link
+        </h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Share a read-only report URL. Creating again replaces the old link.
+        </p>
+        {linkActive && linkQuery.data?.link && (
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Active until{" "}
+            {new Date(linkQuery.data.link.expiresAt).toLocaleDateString()}
+          </p>
+        )}
+        {freshUrl && (
+          <div className="mt-3 space-y-2">
+            <p className="break-all rounded-lg bg-[var(--ink)]/5 px-3 py-2 text-sm">
+              {freshUrl}
+            </p>
+            <button
+              type="button"
+              onClick={() => void copyUrl(freshUrl)}
+              className="min-h-11 w-full rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+            >
+              Copy link
+            </button>
+            {copyNote && (
+              <p className="text-sm text-[var(--muted)]">{copyNote}</p>
+            )}
+          </div>
+        )}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={createLink.isPending}
+            onClick={() => createLink.mutate()}
+            className="min-h-11 rounded-lg bg-[var(--accent)] text-sm font-medium text-white disabled:opacity-60"
+          >
+            {linkActive ? "New link" : "Create link"}
+          </button>
+          <button
+            type="button"
+            disabled={!linkActive || revokeLink.isPending}
+            onClick={() => revokeLink.mutate()}
+            className="min-h-11 rounded-lg border border-red-700 text-sm font-medium text-red-700 disabled:opacity-40"
+          >
+            Revoke
+          </button>
+        </div>
+        {(createLink.isError || revokeLink.isError) && (
+          <p className="mt-2 text-sm text-red-700">Could not update link.</p>
+        )}
+      </section>
+
+      {reportQuery.isPending && (
         <p className="text-[var(--muted)]">Loading report…</p>
       )}
-      {query.isError && (
+      {reportQuery.isError && (
         <p className="text-red-700">Could not load report.</p>
       )}
 
-      {summary && (
-        <section className="mb-6 grid grid-cols-2 gap-2">
-          <Stat label="Tasks" value={summary.totalTasks} />
-          <Stat label="Done" value={summary.doneCount} />
-          <Stat label="Not done" value={summary.notDoneCount} />
-          <Stat label="Incomplete" value={summary.incompleteCount} />
-          <Stat label="Absent" value={summary.absentCount} />
-          <Stat label="Pending" value={summary.pendingCount} />
-          <Stat label="Weekly tests" value={summary.weeklyTestCount} />
-          <Stat
-            label="Test avg"
-            value={
-              summary.weeklyTestAvgMarks != null
-                ? String(summary.weeklyTestAvgMarks)
-                : "—"
-            }
-          />
-        </section>
-      )}
-
-      <ul className="space-y-2">
-        {(query.data?.tasks ?? []).map((task) => {
-          const detail = taskDetail(task);
-          return (
-            <li
-              key={task.taskId}
-              className="rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium">{task.title}</p>
-                  <p className="mt-0.5 text-sm text-[var(--muted)]">
-                    {task.type.replaceAll("_", " ")} · {task.assignedOn}
-                  </p>
-                  {detail && (
-                    <p className="mt-1 text-sm text-[var(--ink)]">{detail}</p>
-                  )}
-                </div>
-                <span className="shrink-0 rounded-lg bg-[var(--ink)]/10 px-2 py-1 text-xs font-medium uppercase tracking-wide">
-                  {statusLabel(task.status)}
-                </span>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      {query.data && query.data.tasks.length === 0 && (
-        <p className="rounded-xl bg-[var(--surface)] px-4 py-6 text-[var(--muted)] shadow-sm">
-          No tasks assigned to this student in this window.
-        </p>
-      )}
+      {reportQuery.data && <StudentReportView report={reportQuery.data} />}
     </main>
-  );
-}
-
-function Stat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <div className="rounded-xl bg-[var(--surface)] px-3 py-3 shadow-sm">
-      <p className="text-xs text-[var(--muted)]">{label}</p>
-      <p className="mt-0.5 text-xl font-semibold">{value}</p>
-    </div>
   );
 }

@@ -8,8 +8,9 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**V2 Step 2 complete:** per-student activity report (summary + task rows over a
-Kolkata day window). See [docs/DEPLOY.md](docs/DEPLOY.md) for optional deploy later.
+**V2 Step 4 complete:** CSV export for student reports and defaulters, plus
+Print / PDF via the browser. See [docs/DEPLOY.md](docs/DEPLOY.md) for optional
+deploy later.
 
 Live demo: _set URLs after first deploy_  
 - Web: `https://<your-app>.vercel.app`  
@@ -89,6 +90,28 @@ Seed marks 3 demo students as defaulters so the list is not empty.
 | --- | --- | --- |
 | GET | `/classes/:classId/students/:studentId/report?days=30` | Summary counts + task rows for one enrolled student (`days` 1–365, default 30). Includes `weeklyTestAvgMarks` when scored tests exist. |
 
+## Parent link API
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/classes/:classId/students/:studentId/parent-link` | Active-link metadata (no raw token) |
+| POST | `/classes/:classId/students/:studentId/parent-link` | Create or rotate; returns raw `token` + `path` once (`expiresInDays` 1–365, default 90) |
+| DELETE | `/classes/:classId/students/:studentId/parent-link` | Revoke the current link |
+| GET | `/parent/:token/report?days=30` | **Public** read-only report (stricter rate limit; 404 if expired/revoked) |
+| GET | `/parent/:token/report.csv?days=30` | **Public** CSV of the same report |
+
+Only the SHA-256 hash of the token is stored. Rotating invalidates the previous URL.
+Web parents open `/p/<token>` (no login).
+
+## Export API
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/classes/:classId/students/:studentId/report.csv?days=30` | Teacher CSV of the student report (UTF-8 BOM for Excel) |
+| GET | `/classes/:classId/defaulters.csv?days=7` | Teacher CSV of the defaulters list |
+
+PDF: use **Print / PDF** in the web UI (browser print dialog → Save as PDF). No server-side PDF library.
+
 ## Web UI
 
 ```bash
@@ -97,7 +120,7 @@ npm run dev:web
 ```
 
 Open http://localhost:5173 → sign in → pick a class → tick grid, students
-(report), or defaulters.
+(report + parent link), or defaulters.
 
 ## Architecture (current)
 
@@ -129,6 +152,8 @@ Deploy runbook: [docs/DEPLOY.md](docs/DEPLOY.md) (`render.yaml`, `vercel.json`).
 | Optimistic status cycle + version check | Feels instant on a phone; 409 if another update won | Needs refresh/invalidate after conflicts |
 | SQL aggregation for defaulters | One query with `HAVING COUNT(*) >= 2`; cheap for ~40 students | Miss criteria are status-based, not “late relative to due date” yet |
 | Student report reuses defaulters date window | Same Kolkata `days` lookback; one query per student | Not a class-wide export yet (CSV/PDF is a later V2 step) |
+| Parent link = hashed secret URL, not parent accounts | Teacher can share WhatsApp-friendly read-only report without registering parents | Anyone with the URL can view until revoke/expiry; no parent login yet |
+| CSV on the API; PDF via browser print | Teachers get Excel-friendly files without a PDF dependency | Layout of “Save as PDF” depends on the browser print engine |
 | Split deploy (Vercel + Render + Neon) | Matches each piece’s strengths; free tiers for a portfolio demo | Cross-origin cookies need SameSite=None; Render free tier cold-starts |
 | Typed fields on one Task / TaskStatus | Weekly tests and holiday parts reuse the same tables | App validation must stay strict per type |
 
