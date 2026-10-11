@@ -8,9 +8,8 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**V2 Step 4 complete:** CSV export for student reports and defaulters, plus
-Print / PDF via the browser. See [docs/DEPLOY.md](docs/DEPLOY.md) for optional
-deploy later.
+**V2 Step 5 complete:** pagination and filtering on students, tasks, and the
+tick grid. See [docs/DEPLOY.md](docs/DEPLOY.md) for optional deploy later.
 
 Live demo: _set URLs after first deploy_  
 - Web: `https://<your-app>.vercel.app`  
@@ -40,7 +39,7 @@ Demo teacher login (after `npm run db:seed` against Neon):
 | POST | `/schools/:schoolId/members` | ADMIN invites a registered teacher by email |
 | GET | `/classes` | Classes assigned to the teacher |
 | POST | `/classes` | Create a class in a school the teacher belongs to |
-| GET | `/classes/:classId/students` | Enrolled students (roll order) |
+| GET | `/classes/:classId/students` | Paginated enrolled students (`page`, `pageSize` default 40, optional `q` name/roll) |
 | POST | `/classes/:classId/students/import` | CSV import; returns per-row errors |
 
 CSV columns: `rollNumber`, `name`, and optional `parentContact`.
@@ -59,7 +58,7 @@ Example body:
 | Method | Path | Notes |
 | --- | --- | --- |
 | POST | `/classes/:classId/tasks` | Create task + PENDING statuses (transaction) |
-| GET | `/classes/:classId/tasks` | List tasks for a class |
+| GET | `/classes/:classId/tasks` | Paginated tasks (`page`, `pageSize`, optional `type`) |
 | GET | `/tasks/:taskId` | Task detail with `statusCount` |
 
 Create types: `DAILY_HOMEWORK`, `NOTEBOOK_CHECK`, `WEEKLY_TEST` (requires `maxMarks`),
@@ -72,7 +71,7 @@ Late student imports get `PENDING` rows for open (not past-due) tasks.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/classes/:classId/grid` | Students × tasks × statuses (+ `defaultSubjectId`) |
+| GET | `/classes/:classId/grid` | Students × tasks × statuses (+ `defaultSubjectId`). Optional filters: `type`, `days` (assignedOn lookback), `q` (student name/roll) |
 | PUT | `/task-statuses/:statusId` | Body `{ status, version }` — queued taps avoid 409 |
 | POST | `/tasks/:taskId/mark-all-complete` | Only updates **PENDING** → DONE/CHECKED |
 
@@ -154,6 +153,7 @@ Deploy runbook: [docs/DEPLOY.md](docs/DEPLOY.md) (`render.yaml`, `vercel.json`).
 | Student report reuses defaulters date window | Same Kolkata `days` lookback; one query per student | Not a class-wide export yet (CSV/PDF is a later V2 step) |
 | Parent link = hashed secret URL, not parent accounts | Teacher can share WhatsApp-friendly read-only report without registering parents | Anyone with the URL can view until revoke/expiry; no parent login yet |
 | CSV on the API; PDF via browser print | Teachers get Excel-friendly files without a PDF dependency | Layout of “Save as PDF” depends on the browser print engine |
+| Filter the grid; paginate list endpoints | Phone UI stays fast as task history grows; marking still shows a full student column set when unfiltered | Students/tasks list response shape is now `{ items, page, pageSize, total, totalPages }` (breaking vs bare arrays) |
 | Split deploy (Vercel + Render + Neon) | Matches each piece’s strengths; free tiers for a portfolio demo | Cross-origin cookies need SameSite=None; Render free tier cold-starts |
 | Typed fields on one Task / TaskStatus | Weekly tests and holiday parts reuse the same tables | App validation must stay strict per type |
 
