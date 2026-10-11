@@ -241,8 +241,25 @@ describe("task routes", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const tasks = response.json() as Array<{ statusCount: number }>;
-    expect(tasks.length).toBeGreaterThanOrEqual(2);
+    const body = response.json() as {
+      items: Array<{ statusCount: number; type: string }>;
+      total: number;
+    };
+    expect(body.items.length).toBeGreaterThanOrEqual(2);
+    expect(body.total).toBeGreaterThanOrEqual(2);
+
+    const filtered = await app.inject({
+      method: "GET",
+      url: `/classes/${classId}/tasks?type=DAILY_HOMEWORK`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(filtered.statusCode).toBe(200);
+    const daily = filtered.json() as {
+      items: Array<{ type: string }>;
+    };
+    expect(daily.items.every((task) => task.type === "DAILY_HOMEWORK")).toBe(
+      true,
+    );
   });
 
   it("forbids another teacher from listing or fetching tasks for an unassigned class", async () => {

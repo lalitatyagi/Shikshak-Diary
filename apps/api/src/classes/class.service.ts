@@ -4,6 +4,7 @@ import {
   schoolSchema,
   startOfTodayKolkata,
   studentSchema,
+  toPaginated,
   type ClassDto,
   type CreateClassBody,
   type CsvImportResult,
@@ -259,16 +260,56 @@ export async function listStudentsForClass(
   classId: string,
   userId: string,
   role: Role,
-): Promise<StudentDto[]> {
+  options: { page: number; pageSize: number; q?: string } = {
+    page: 1,
+    pageSize: 40,
+  },
+): Promise<{
+  items: StudentDto[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}> {
   await assertCanAccessClass(classId, userId, role);
 
-  const enrollments = await prisma.enrollment.findMany({
-    where: { classId },
-    include: { student: true },
-    orderBy: { student: { rollNumber: "asc" } },
-  });
+  const studentFilter = studentSearchWhere(options.q);
+  const where = {
+    classId,
+    ...(studentFilter ? { student: studentFilter } : {}),
+  };
 
-  return enrollments.map((enrollment) => toStudentDto(enrollment.student));
+  const [total, enrollments] = await Promise.all([
+    prisma.enrollment.count({ where }),
+    prisma.enrollment.findMany({
+      where,
+      include: { student: true },
+      orderBy: { student: { rollNumber: "asc" } },
+      skip: (options.page - 1) * options.pageSize,
+      take: options.pageSize,
+    }),
+  ]);
+
+  return toPaginated(
+    enrollments.map((enrollment) => toStudentDto(enrollment.student)),
+    total,
+    options.page,
+    options.pageSize,
+  );
+}
+
+function studentSearchWhere(q?: string):
+  | { OR: Array<Record<string, unknown>> }
+  | undefined {
+  if (!q) return undefined;
+  const roll = Number(q);
+  const or: Array<Record<string, unknown>> = [
+    { name: { contains: q, mode: "insensitive" } },
+  ];
+  if (Number.isInteger(roll) && roll > 0) {
+    or.push({ rollNumber: roll });
+  }
+  return { OR: or };
 }
 
 export async function importStudentsFromCsv(

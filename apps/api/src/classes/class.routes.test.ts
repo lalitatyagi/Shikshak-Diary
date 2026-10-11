@@ -168,7 +168,22 @@ describe("class routes", () => {
       headers: { authorization: `Bearer ${accessToken}` },
     });
     expect(students.statusCode).toBe(200);
-    expect((students.json() as unknown[]).length).toBe(2);
+    const body = students.json() as {
+      items: unknown[];
+      total: number;
+      page: number;
+    };
+    expect(body.items.length).toBe(2);
+    expect(body.total).toBe(2);
+    expect(body.page).toBe(1);
+
+    const filtered = await app.inject({
+      method: "GET",
+      url: `/classes/${classId}/students?q=1`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(filtered.statusCode).toBe(200);
+    expect((filtered.json() as { total: number }).total).toBe(1);
   });
 
   it("forbids another teacher from viewing or importing an unassigned class", async () => {

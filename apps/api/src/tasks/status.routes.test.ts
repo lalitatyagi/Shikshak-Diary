@@ -118,6 +118,30 @@ describe("tick grid status routes", () => {
     await prisma.$disconnect();
   });
 
+  it("filters the grid by task type and student search", async () => {
+    const byType = await app.inject({
+      method: "GET",
+      url: `/classes/${classId}/grid?type=NOTEBOOK_CHECK`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(byType.statusCode).toBe(200);
+    expect((byType.json() as { tasks: unknown[] }).tasks).toHaveLength(0);
+
+    const byStudent = await app.inject({
+      method: "GET",
+      url: `/classes/${classId}/grid?q=One`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(byStudent.statusCode).toBe(200);
+    const filtered = byStudent.json() as {
+      students: Array<{ name: string }>;
+      statuses: unknown[];
+    };
+    expect(filtered.students).toHaveLength(1);
+    expect(filtered.students[0]!.name).toBe("One");
+    expect(filtered.statuses).toHaveLength(1);
+  });
+
   it("returns a class grid and updates a cell via PUT", async () => {
     const gridRes = await app.inject({
       method: "GET",

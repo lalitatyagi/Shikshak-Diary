@@ -5,8 +5,10 @@ import {
   csvImportBodySchema,
   csvImportResultSchema,
   inviteSchoolMemberBodySchema,
+  paginatedResponseSchema,
   schoolSchema,
   studentSchema,
+  studentsListQuerySchema,
 } from "@classroom-tracker/shared";
 import type { FastifyInstance } from "fastify";
 import {
@@ -24,6 +26,8 @@ import {
   listSchoolsForUser,
   listStudentsForClass,
 } from "./class.service.js";
+
+const paginatedStudentsSchema = paginatedResponseSchema(studentSchema);
 
 export async function classRoutes(app: FastifyInstance): Promise<void> {
   app.post(
@@ -115,15 +119,21 @@ export async function classRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: [requireAuth, requireRole(...teacherRoles)] },
     async (request, reply) => {
       const { classId } = request.params as { classId: string };
+      const parsed = studentsListQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid students query",
+          details: parsed.error.flatten(),
+        });
+      }
       try {
-        const students = await listStudentsForClass(
+        const result = await listStudentsForClass(
           classId,
           request.authUser!.id,
           request.authUser!.role,
+          parsed.data,
         );
-        return reply.send(
-          students.map((student) => studentSchema.parse(student)),
-        );
+        return reply.send(paginatedStudentsSchema.parse(result));
       } catch (error) {
         return sendHttpError(reply, error);
       }

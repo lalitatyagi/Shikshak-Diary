@@ -1,6 +1,7 @@
 import {
   bulkCompleteResultSchema,
   classGridSchema,
+  gridQuerySchema,
   taskStatusSchema,
   updateStatusBodySchema,
 } from "@classroom-tracker/shared";
@@ -23,11 +24,19 @@ export async function statusRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: [requireAuth, requireRole(...teacherRoles)] },
     async (request, reply) => {
       const { classId } = request.params as { classId: string };
+      const parsed = gridQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid grid query",
+          details: parsed.error.flatten(),
+        });
+      }
       try {
         const grid = await getClassGrid(
           classId,
           request.authUser!.id,
           request.authUser!.role,
+          parsed.data,
         );
         return reply.send(classGridSchema.parse(grid));
       } catch (error) {

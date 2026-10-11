@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useRef, useState, type FormEvent } from "react";
 import {
   classGridSchema,
@@ -7,6 +7,7 @@ import {
   longPressStatuses,
   primaryTapStatus,
   taskSchema,
+  taskTypeSchema,
   toKolkataCalendarDate,
   type ClassGridDto,
   type StatusValue,
@@ -14,6 +15,16 @@ import {
   type TaskType,
 } from "@classroom-tracker/shared";
 import { ApiError, apiFetch } from "../api";
+
+const TYPE_FILTERS: Array<{ value: "" | TaskType; label: string }> = [
+  { value: "", label: "All" },
+  { value: "DAILY_HOMEWORK", label: "HW" },
+  { value: "NOTEBOOK_CHECK", label: "NB" },
+  { value: "WEEKLY_TEST", label: "Test" },
+  { value: "HOLIDAY_HOMEWORK", label: "Holiday" },
+];
+
+const DAY_FILTERS = [7, 14, 30] as const;
 
 function statusLabel(status: StatusValue): string {
   switch (status) {
@@ -89,11 +100,25 @@ function menuLabel(status: StatusValue): string {
 
 export function TickGridPage() {
   const { classId = "" } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const queryKey = ["grid", classId] as const;
   const queuesRef = useRef(new Map<string, Promise<void>>());
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
+
+  const typeParam = searchParams.get("type") ?? "";
+  const typeFilter = taskTypeSchema.safeParse(typeParam).success
+    ? (typeParam as TaskType)
+    : undefined;
+  const daysParam = Number(searchParams.get("days"));
+  const daysFilter =
+    Number.isInteger(daysParam) && daysParam >= 1 && daysParam <= 365
+      ? daysParam
+      : undefined;
+  const qFilter = (searchParams.get("q") ?? "").trim();
+  const [draftQ, setDraftQ] = useState(qFilter);
+
+  const queryKey = ["grid", classId, typeFilter, daysFilter, qFilter] as const;
 
   const [showNewTask, setShowNewTask] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -112,11 +137,28 @@ export function TickGridPage() {
   const gridQuery = useQuery({
     queryKey,
     enabled: Boolean(classId),
-    queryFn: async () =>
-      classGridSchema.parse(
-        await apiFetch<unknown>(`/classes/${classId}/grid`),
-      ),
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (typeFilter) params.set("type", typeFilter);
+      if (daysFilter != null) params.set("days", String(daysFilter));
+      if (qFilter) params.set("q", qFilter);
+      const qs = params.toString();
+      return classGridSchema.parse(
+        await apiFetch<unknown>(
+          `/classes/${classId}/grid${qs ? `?${qs}` : ""}`,
+        ),
+      );
+    },
   });
+
+  function patchFilters(patch: Record<string, string | undefined>) {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setSearchParams(next);
+  }
 
   function enqueueStatusUpdate(
     statusId: string,
@@ -278,6 +320,74 @@ export function TickGridPage() {
           + New task
         </button>
       </header>
+
+      <div className="mb-3 space-y-2 px-1">
+        <div className="flex gap-1 overflow-x-auto">
+          {TYPE_FILTERS.map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              onClick={() =>
+                patchFilters({ type: option.value || undefined })
+              }
+              className={`min-h-10 shrink-0 rounded-lg px-3 text-sm font-medium ${
+                (typeFilter ?? "") === option.value
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface)] text-[var(--ink)] shadow-sm"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => patchFilters({ days: undefined })}
+            className={`min-h-10 flex-1 rounded-lg text-sm font-medium ${
+              daysFilter == null
+                ? "bg-[var(--accent)] text-white"
+                : "bg-[var(--surface)] text-[var(--ink)] shadow-sm"
+            }`}
+          >
+            All days
+          </button>
+          {DAY_FILTERS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => patchFilters({ days: String(option) })}
+              className={`min-h-10 flex-1 rounded-lg text-sm font-medium ${
+                daysFilter === option
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[var(--surface)] text-[var(--ink)] shadow-sm"
+              }`}
+            >
+              {option}d
+            </button>
+          ))}
+        </div>
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            patchFilters({ q: draftQ.trim() || undefined });
+          }}
+        >
+          <input
+            value={draftQ}
+            onChange={(event) => setDraftQ(event.target.value)}
+            placeholder="Find student"
+            className="min-h-11 flex-1 rounded-lg border border-emerald-900/15 bg-[var(--surface)] px-3 text-sm"
+          />
+          <button
+            type="submit"
+            className="min-h-11 rounded-lg border border-[var(--accent)] px-3 text-sm font-medium text-[var(--accent)]"
+          >
+            Find
+          </button>
+        </form>
+      </div>
 
       {showNewTask && (
         <form

@@ -1,4 +1,9 @@
-import { createTaskBodySchema, taskSchema } from "@classroom-tracker/shared";
+import {
+  createTaskBodySchema,
+  paginatedResponseSchema,
+  taskSchema,
+  tasksListQuerySchema,
+} from "@classroom-tracker/shared";
 import type { FastifyInstance } from "fastify";
 import {
   requireAuth,
@@ -11,6 +16,8 @@ import {
   getTaskById,
   listTasksForClass,
 } from "./task.service.js";
+
+const paginatedTasksSchema = paginatedResponseSchema(taskSchema);
 
 export async function taskRoutes(app: FastifyInstance): Promise<void> {
   app.post(
@@ -45,13 +52,21 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: [requireAuth, requireRole(...teacherRoles)] },
     async (request, reply) => {
       const { classId } = request.params as { classId: string };
+      const parsed = tasksListQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid tasks query",
+          details: parsed.error.flatten(),
+        });
+      }
       try {
-        const tasks = await listTasksForClass(
+        const result = await listTasksForClass(
           classId,
           request.authUser!.id,
           request.authUser!.role,
+          parsed.data,
         );
-        return reply.send(tasks.map((task) => taskSchema.parse(task)));
+        return reply.send(paginatedTasksSchema.parse(result));
       } catch (error) {
         return sendHttpError(reply, error);
       }

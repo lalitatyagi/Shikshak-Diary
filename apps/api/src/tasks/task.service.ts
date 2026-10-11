@@ -2,9 +2,11 @@ import {
   kolkataCalendarDateToInstant,
   taskSchema,
   toKolkataCalendarDate,
+  toPaginated,
   type CreateTaskBody,
   type Role,
   type TaskDto,
+  type TaskType,
 } from "@classroom-tracker/shared";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
@@ -140,16 +142,41 @@ export async function listTasksForClass(
   classId: string,
   userId: string,
   role: Role,
-): Promise<TaskDto[]> {
+  options: { page: number; pageSize: number; type?: TaskType } = {
+    page: 1,
+    pageSize: 40,
+  },
+): Promise<{
+  items: TaskDto[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}> {
   await assertCanAccessClass(classId, userId, role);
 
-  const tasks = await prisma.task.findMany({
-    where: { classId },
-    orderBy: [{ assignedOn: "desc" }, { createdAt: "desc" }],
-    include: { _count: { select: { statuses: true } } },
-  });
+  const where = {
+    classId,
+    ...(options.type ? { type: options.type } : {}),
+  };
 
-  return tasks.map((task) => toTaskDto(task, task._count.statuses));
+  const [total, tasks] = await Promise.all([
+    prisma.task.count({ where }),
+    prisma.task.findMany({
+      where,
+      orderBy: [{ assignedOn: "desc" }, { createdAt: "desc" }],
+      include: { _count: { select: { statuses: true } } },
+      skip: (options.page - 1) * options.pageSize,
+      take: options.pageSize,
+    }),
+  ]);
+
+  return toPaginated(
+    tasks.map((task) => toTaskDto(task, task._count.statuses)),
+    total,
+    options.page,
+    options.pageSize,
+  );
 }
 
 export async function getTaskById(

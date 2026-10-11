@@ -1,8 +1,11 @@
 import {
+  addKolkataCalendarDays,
   bulkCompleteResultSchema,
   classGridSchema,
   completeStatusForType,
+  defaultersWindow,
   isStatusAllowedForType,
+  kolkataCalendarDateToInstant,
   taskStatusSchema,
   toKolkataCalendarDate,
   validateMarksAndParts,
@@ -11,6 +14,7 @@ import {
   type Role,
   type StatusValue,
   type TaskStatusDto,
+  type TaskType,
   studentSchema,
 } from "@classroom-tracker/shared";
 import { prisma } from "../db.js";
@@ -44,6 +48,12 @@ export async function getClassGrid(
   classId: string,
   userId: string,
   role: Role,
+  filters: {
+    type?: TaskType;
+    days?: number;
+    q?: string;
+  } = {},
+  now: Date = new Date(),
 ): Promise<ClassGridDto> {
   await assertCanAccessClass(classId, userId, role);
 
@@ -67,24 +77,49 @@ export async function getClassGrid(
     throw new HttpError("No subject found for this class", 404);
   }
 
+  const taskWhere: {
+    classId: string;
+    type?: TaskType;
+    assignedOn?: { gte: Date; lt: Date };
+  } = { classId };
+  if (filters.type) {
+    taskWhere.type = filters.type;
+  }
+  if (filters.days != null) {
+    const { fromDate, toDate } = defaultersWindow(filters.days, now);
+    taskWhere.assignedOn = {
+      gte: kolkataCalendarDateToInstant(fromDate),
+      lt: kolkataCalendarDateToInstant(addKolkataCalendarDays(toDate, 1)),
+    };
+  }
+
+  const studentWhere = studentSearchWhere(filters.q);
+
   const [enrollments, tasks] = await Promise.all([
     prisma.enrollment.findMany({
-      where: { classId },
+      where: {
+        classId,
+        ...(studentWhere ? { student: studentWhere } : {}),
+      },
       include: { student: true },
       orderBy: { student: { rollNumber: "asc" } },
     }),
     prisma.task.findMany({
-      where: { classId },
+      where: taskWhere,
       orderBy: [{ assignedOn: "asc" }, { createdAt: "asc" }],
     }),
   ]);
 
+  const studentIds = new Set(enrollments.map((row) => row.studentId));
   const taskIds = tasks.map((task) => task.id);
   const statuses =
     taskIds.length === 0
       ? []
       : await prisma.taskStatus.findMany({
-          where: { taskId: { in: taskIds } },
+          where: {
+            taskId: { in: taskIds },
+            ...(filters.q ? { studentId: { in: [...studentIds] } } : {}),
+          },
         });
 
   return classGridSchema.parse({
@@ -108,6 +143,20 @@ export async function getClassGrid(
     })),
     statuses: statuses.map((status) => toStatusDto(status)),
   });
+}
+
+function studentSearchWhere(q?: string):
+  | { OR: Array<Record<string, unknown>> }
+  | undefined {
+  if (!q) return undefined;
+  const roll = Number(q);
+  const or: Array<Record<string, unknown>> = [
+    { name: { contains: q, mode: "insensitive" } },
+  ];
+  if (Number.isInteger(roll) && roll > 0) {
+    or.push({ rollNumber: roll });
+  }
+  return { OR: or };
 }
 
 export async function updateTaskStatus(
