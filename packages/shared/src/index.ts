@@ -8,6 +8,18 @@ export {
   type StatusValue,
 } from "./enums.js";
 export {
+  teacherRoles,
+  classManagerRoles,
+  isTeacherRole,
+  canManageSchool,
+  canCreateClass,
+  canManageRoster,
+  canManageParentLinks,
+  canTeachClass,
+  type TeacherRole,
+  type ClassManagerRole,
+} from "./rbac.js";
+export {
   registerBodySchema,
   loginBodySchema,
   authUserSchema,
@@ -81,6 +93,9 @@ export {
 } from "./parent-link.js";
 export {
   csvCell,
+  friendlyTaskType,
+  friendlyStatus,
+  friendlyTaskResult,
   studentReportToCsv,
   defaultersToCsv,
   studentReportCsvFilename,

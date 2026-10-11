@@ -110,7 +110,8 @@ export async function createSchool(name: string): Promise<SchoolDto> {
 export async function inviteSchoolMember(
   schoolId: string,
   email: string,
-): Promise<{ schoolId: string; userId: string; email: string }> {
+  role?: "TEACHER" | "CLASS_TEACHER",
+): Promise<{ schoolId: string; userId: string; email: string; role: Role }> {
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
   if (!school) {
     throw new HttpError("School not found", 404);
@@ -125,6 +126,16 @@ export async function inviteSchoolMember(
   if (user.role === "PARENT") {
     throw new HttpError("Parents cannot be added to a school", 400);
   }
+  if (user.role === "ADMIN" && role) {
+    throw new HttpError("Cannot change an admin's role via invite", 400);
+  }
+
+  if (role && user.role !== role && user.role !== "ADMIN") {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { role },
+    });
+  }
 
   await prisma.schoolMember.upsert({
     where: { userId_schoolId: { userId: user.id, schoolId } },
@@ -132,7 +143,17 @@ export async function inviteSchoolMember(
     update: {},
   });
 
-  return { schoolId, userId: user.id, email: user.email };
+  const updated = await prisma.user.findUniqueOrThrow({
+    where: { id: user.id },
+    select: { role: true, email: true },
+  });
+
+  return {
+    schoolId,
+    userId: user.id,
+    email: updated.email,
+    role: updated.role,
+  };
 }
 
 export async function createClassForTeacher(
@@ -298,9 +319,9 @@ export async function listStudentsForClass(
   );
 }
 
-function studentSearchWhere(q?: string):
-  | { OR: Array<Record<string, unknown>> }
-  | undefined {
+function studentSearchWhere(
+  q?: string,
+): { OR: Array<Record<string, unknown>> } | undefined {
   if (!q) return undefined;
   const roll = Number(q);
   const or: Array<Record<string, unknown>> = [

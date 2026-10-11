@@ -5,7 +5,7 @@ import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
 import {
   deleteUsersByEmail,
-  grantSchoolMembership,
+  grantClassTeacherMembership,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -58,7 +58,7 @@ describe("class routes", () => {
     });
     otherToken = (otherRes.json() as { accessToken: string }).accessToken;
 
-    await grantSchoolMembership(teacherEmail, schoolId);
+    await grantClassTeacherMembership(teacherEmail, schoolId);
   });
 
   afterAll(async () => {
@@ -282,7 +282,7 @@ describe("class routes", () => {
     });
     const attackerToken = (attackerRegister.json() as { accessToken: string })
       .accessToken;
-    await grantSchoolMembership(attackerEmail, schoolId);
+    await grantClassTeacherMembership(attackerEmail, schoolId);
 
     const attackerClass = await app.inject({
       method: "POST",
@@ -402,7 +402,7 @@ describe("class routes", () => {
     });
     const otherAccess = (registered.json() as { accessToken: string })
       .accessToken;
-    await grantSchoolMembership(otherEmail, schoolId);
+    await grantClassTeacherMembership(otherEmail, schoolId);
 
     const firstClass = await app.inject({
       method: "POST",

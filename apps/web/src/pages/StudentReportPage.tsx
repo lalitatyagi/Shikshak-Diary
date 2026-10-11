@@ -2,18 +2,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
+  canManageParentLinks,
   DEFAULT_REPORT_DAYS,
   parentLinkCreatedSchema,
   parentLinkStatusSchema,
   studentReportSchema,
 } from "@classroom-tracker/shared";
 import { apiDownload, apiFetch } from "../api";
+import { useAuth } from "../auth";
 import { StudentReportView } from "../components/StudentReportView";
 
 const DAY_OPTIONS = [7, 14, 30, 90] as const;
 
 export function StudentReportPage() {
   const { classId = "", studentId = "" } = useParams();
+  const { user } = useAuth();
+  const canShare = user ? canManageParentLinks(user.role) : false;
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [freshUrl, setFreshUrl] = useState<string | null>(null);
@@ -39,7 +43,7 @@ export function StudentReportPage() {
 
   const linkQuery = useQuery({
     queryKey: ["parent-link", classId, studentId],
-    enabled: Boolean(classId && studentId),
+    enabled: Boolean(classId && studentId && canShare),
     queryFn: async () =>
       parentLinkStatusSchema.parse(
         await apiFetch<unknown>(
@@ -170,58 +174,60 @@ export function StudentReportPage() {
         <p className="no-print mb-4 text-sm text-red-700">{exportError}</p>
       )}
 
-      <section className="no-print mb-6 rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm">
-        <h2 className="text-sm font-semibold text-[var(--ink)]">
-          Parent link
-        </h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Share a read-only report URL. Creating again replaces the old link.
-        </p>
-        {linkActive && linkQuery.data?.link && (
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Active until{" "}
-            {new Date(linkQuery.data.link.expiresAt).toLocaleDateString()}
+      {canShare && (
+        <section className="no-print mb-6 rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm">
+          <h2 className="text-sm font-semibold text-[var(--ink)]">
+            Parent link
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Share a read-only report URL. Creating again replaces the old link.
           </p>
-        )}
-        {freshUrl && (
-          <div className="mt-3 space-y-2">
-            <p className="break-all rounded-lg bg-[var(--ink)]/5 px-3 py-2 text-sm">
-              {freshUrl}
+          {linkActive && linkQuery.data?.link && (
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Active until{" "}
+              {new Date(linkQuery.data.link.expiresAt).toLocaleDateString()}
             </p>
+          )}
+          {freshUrl && (
+            <div className="mt-3 space-y-2">
+              <p className="break-all rounded-lg bg-[var(--ink)]/5 px-3 py-2 text-sm">
+                {freshUrl}
+              </p>
+              <button
+                type="button"
+                onClick={() => void copyUrl(freshUrl)}
+                className="min-h-11 w-full rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+              >
+                Copy link
+              </button>
+              {copyNote && (
+                <p className="text-sm text-[var(--muted)]">{copyNote}</p>
+              )}
+            </div>
+          )}
+          <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => void copyUrl(freshUrl)}
-              className="min-h-11 w-full rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+              disabled={createLink.isPending}
+              onClick={() => createLink.mutate()}
+              className="min-h-11 rounded-lg bg-[var(--accent)] text-sm font-medium text-white disabled:opacity-60"
             >
-              Copy link
+              {linkActive ? "New link" : "Create link"}
             </button>
-            {copyNote && (
-              <p className="text-sm text-[var(--muted)]">{copyNote}</p>
-            )}
+            <button
+              type="button"
+              disabled={!linkActive || revokeLink.isPending}
+              onClick={() => revokeLink.mutate()}
+              className="min-h-11 rounded-lg border border-red-700 text-sm font-medium text-red-700 disabled:opacity-40"
+            >
+              Revoke
+            </button>
           </div>
-        )}
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            disabled={createLink.isPending}
-            onClick={() => createLink.mutate()}
-            className="min-h-11 rounded-lg bg-[var(--accent)] text-sm font-medium text-white disabled:opacity-60"
-          >
-            {linkActive ? "New link" : "Create link"}
-          </button>
-          <button
-            type="button"
-            disabled={!linkActive || revokeLink.isPending}
-            onClick={() => revokeLink.mutate()}
-            className="min-h-11 rounded-lg border border-red-700 text-sm font-medium text-red-700 disabled:opacity-40"
-          >
-            Revoke
-          </button>
-        </div>
-        {(createLink.isError || revokeLink.isError) && (
-          <p className="mt-2 text-sm text-red-700">Could not update link.</p>
-        )}
-      </section>
+          {(createLink.isError || revokeLink.isError) && (
+            <p className="mt-2 text-sm text-red-700">Could not update link.</p>
+          )}
+        </section>
+      )}
 
       {reportQuery.isPending && (
         <p className="text-[var(--muted)]">Loading report…</p>

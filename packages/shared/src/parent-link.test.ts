@@ -14,8 +14,9 @@ describe("createParentLinkBodySchema", () => {
   });
 
   it("rejects out-of-range TTL", () => {
-    expect(createParentLinkBodySchema.safeParse({ expiresInDays: 0 }).success)
-      .toBe(false);
+    expect(
+      createParentLinkBodySchema.safeParse({ expiresInDays: 0 }).success,
+    ).toBe(false);
     expect(
       createParentLinkBodySchema.safeParse({ expiresInDays: 366 }).success,
     ).toBe(false);

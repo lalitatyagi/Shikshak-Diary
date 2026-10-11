@@ -47,9 +47,7 @@ export function ParentReportPage() {
         </h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           Last {days} days
-          {query.data
-            ? ` (${query.data.fromDate} → ${query.data.toDate})`
-            : ""}
+          {query.data ? ` (${query.data.fromDate} → ${query.data.toDate})` : ""}
           .
         </p>
       </header>

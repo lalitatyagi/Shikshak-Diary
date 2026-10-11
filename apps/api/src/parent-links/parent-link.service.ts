@@ -51,7 +51,10 @@ function toMeta(
   });
 }
 
-async function assertEnrolled(classId: string, studentId: string): Promise<void> {
+async function assertEnrolled(
+  classId: string,
+  studentId: string,
+): Promise<void> {
   const enrollment = await prisma.enrollment.findUnique({
     where: { studentId_classId: { studentId, classId } },
   });

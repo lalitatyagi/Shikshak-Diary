@@ -9,9 +9,9 @@ import {
 } from "@classroom-tracker/shared";
 import type { FastifyInstance } from "fastify";
 import {
+  classManagerRoles,
   requireAuth,
   requireRole,
-  teacherRoles,
 } from "../auth/auth.middleware.js";
 import { sendHttpError } from "../errors.js";
 import { sendCsvAttachment } from "../exports/csv-response.js";
@@ -25,7 +25,7 @@ import {
 export async function parentLinkRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/classes/:classId/students/:studentId/parent-link",
-    { preHandler: [requireAuth, requireRole(...teacherRoles)] },
+    { preHandler: [requireAuth, requireRole(...classManagerRoles)] },
     async (request, reply) => {
       const { classId, studentId } = request.params as {
         classId: string;
@@ -47,7 +47,7 @@ export async function parentLinkRoutes(app: FastifyInstance): Promise<void> {
 
   app.post(
     "/classes/:classId/students/:studentId/parent-link",
-    { preHandler: [requireAuth, requireRole(...teacherRoles)] },
+    { preHandler: [requireAuth, requireRole(...classManagerRoles)] },
     async (request, reply) => {
       const { classId, studentId } = request.params as {
         classId: string;
@@ -69,9 +69,7 @@ export async function parentLinkRoutes(app: FastifyInstance): Promise<void> {
           request.authUser!.role,
           parsed.data.expiresInDays,
         );
-        return reply
-          .status(201)
-          .send(parentLinkCreatedSchema.parse(created));
+        return reply.status(201).send(parentLinkCreatedSchema.parse(created));
       } catch (error) {
         return sendHttpError(reply, error);
       }
@@ -80,7 +78,7 @@ export async function parentLinkRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete(
     "/classes/:classId/students/:studentId/parent-link",
-    { preHandler: [requireAuth, requireRole(...teacherRoles)] },
+    { preHandler: [requireAuth, requireRole(...classManagerRoles)] },
     async (request, reply) => {
       const { classId, studentId } = request.params as {
         classId: string;

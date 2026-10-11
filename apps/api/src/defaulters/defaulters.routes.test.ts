@@ -11,7 +11,7 @@ import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
 import {
   deleteUsersByEmail,
-  grantSchoolMembership,
+  grantClassTeacherMembership,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -69,7 +69,7 @@ describe("defaulters routes", () => {
       })
     ).json().accessToken as string;
 
-    await grantSchoolMembership(email, schoolId);
+    await grantClassTeacherMembership(email, schoolId);
 
     classId = (
       await app.inject({
@@ -313,7 +313,7 @@ describe("defaulters routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toMatch(/text\/csv/);
-    expect(res.body).toContain("rollNumber,name,missCount");
+    expect(res.body).toContain("Roll no.,Student name,Misses");
     expect(res.body).toContain("One");
   });
 });

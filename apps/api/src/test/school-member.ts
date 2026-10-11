@@ -1,4 +1,22 @@
+import { Role } from "@prisma/client";
 import { prisma } from "../db.js";
+
+/** Promote a registered TEACHER so CSV import / parent links are allowed. */
+export async function promoteToClassTeacher(email: string): Promise<void> {
+  await prisma.user.update({
+    where: { email: email.toLowerCase() },
+    data: { role: Role.CLASS_TEACHER },
+  });
+}
+
+/** School membership + CLASS_TEACHER role (roster / parent-link managers). */
+export async function grantClassTeacherMembership(
+  email: string,
+  schoolId: string,
+): Promise<void> {
+  await grantSchoolMembership(email, schoolId);
+  await promoteToClassTeacher(email);
+}
 
 /** AuditLog.userId is ON DELETE RESTRICT, so logs go first. */
 export async function deleteUsersByEmail(emails: string[]): Promise<void> {

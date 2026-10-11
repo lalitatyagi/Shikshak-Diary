@@ -9,9 +9,6 @@ export function sendCsvAttachment(
   const safeName = filename.replace(/[^\w.-]+/g, "_");
   return reply
     .header("Content-Type", "text/csv; charset=utf-8")
-    .header(
-      "Content-Disposition",
-      `attachment; filename="${safeName}"`,
-    )
+    .header("Content-Disposition", `attachment; filename="${safeName}"`)
     .send("\uFEFF" + csv);
 }

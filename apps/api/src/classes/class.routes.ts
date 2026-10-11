@@ -12,6 +12,7 @@ import {
 } from "@classroom-tracker/shared";
 import type { FastifyInstance } from "fastify";
 import {
+  classManagerRoles,
   requireAuth,
   requireRole,
   teacherRoles,
@@ -61,7 +62,11 @@ export async function classRoutes(app: FastifyInstance): Promise<void> {
       }
 
       try {
-        const member = await inviteSchoolMember(schoolId, parsed.data.email);
+        const member = await inviteSchoolMember(
+          schoolId,
+          parsed.data.email,
+          parsed.data.role,
+        );
         return reply.status(201).send(member);
       } catch (error) {
         return sendHttpError(reply, error);
@@ -142,7 +147,7 @@ export async function classRoutes(app: FastifyInstance): Promise<void> {
 
   app.post(
     "/classes/:classId/students/import",
-    { preHandler: [requireAuth, requireRole(...teacherRoles)] },
+    { preHandler: [requireAuth, requireRole(...classManagerRoles)] },
     async (request, reply) => {
       const { classId } = request.params as { classId: string };
       const parsed = csvImportBodySchema.safeParse(request.body);

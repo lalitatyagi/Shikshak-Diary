@@ -53,7 +53,10 @@ export async function buildStudentReport(
       },
     },
     include: { task: true },
-    orderBy: [{ task: { assignedOn: "desc" } }, { task: { createdAt: "desc" } }],
+    orderBy: [
+      { task: { assignedOn: "desc" } },
+      { task: { createdAt: "desc" } },
+    ],
   });
 
   let doneCount = 0;
@@ -96,9 +99,7 @@ export async function buildStudentReport(
       pendingCount,
       weeklyTestCount,
       weeklyTestAvgMarks:
-        marksCount > 0
-          ? Math.round((marksSum / marksCount) * 10) / 10
-          : null,
+        marksCount > 0 ? Math.round((marksSum / marksCount) * 10) / 10 : null,
     },
     tasks: rows.map((row) => ({
       taskId: row.task.id,

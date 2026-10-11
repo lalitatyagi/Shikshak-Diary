@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiFetch } from "../api";
@@ -158,5 +158,75 @@ describe("TickGridPage status errors", () => {
       expect(putBodies).toHaveLength(2);
     });
     expect(putBodies[1]).toMatchObject({ status: "NOT_DONE", version: 2 });
+  });
+
+  it("opens a marks sheet for weekly tests and saves the score", async () => {
+    const testGrid = {
+      ...grid,
+      tasks: [
+        {
+          id: "task_test",
+          title: "Chapter 7",
+          type: "WEEKLY_TEST" as const,
+          assignedOn: "2026-10-03",
+          dueOn: "2026-10-03",
+          maxMarks: 50,
+          totalParts: null,
+        },
+      ],
+      statuses: [
+        {
+          id: "status_test",
+          taskId: "task_test",
+          studentId: "student_1",
+          status: "PENDING" as const,
+          version: 1,
+          marks: null,
+          partsDone: null,
+          remark: null,
+        },
+      ],
+    };
+
+    const putBodies: Array<{
+      status: string;
+      marks?: number;
+      version: number;
+    }> = [];
+    vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+      if (String(path).includes("/grid")) {
+        return testGrid;
+      }
+      const body = JSON.parse(String(init?.body)) as {
+        status: string;
+        marks?: number;
+        version: number;
+      };
+      putBodies.push(body);
+      return {
+        ...testGrid.statuses[0],
+        status: body.status,
+        marks: body.marks ?? null,
+        version: body.version + 1,
+      };
+    });
+
+    renderGrid();
+    const cell = await screen.findByRole("button", {
+      name: "Aarav Sharma Chapter 7",
+    });
+    fireEvent.click(cell);
+
+    expect(
+      await screen.findByRole("dialog", { name: "Enter marks" }),
+    ).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("0–50"), {
+      target: { value: "40" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save marks" }));
+
+    await waitFor(() => {
+      expect(putBodies).toEqual([{ status: "DONE", marks: 40, version: 1 }]);
+    });
   });
 });

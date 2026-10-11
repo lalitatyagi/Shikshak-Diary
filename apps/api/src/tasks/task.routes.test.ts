@@ -10,7 +10,7 @@ import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
 import {
   deleteUsersByEmail,
-  grantSchoolMembership,
+  grantClassTeacherMembership,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -63,7 +63,7 @@ describe("task routes", () => {
     });
     otherToken = (otherRegister.json() as { accessToken: string }).accessToken;
 
-    await grantSchoolMembership(email, schoolId);
+    await grantClassTeacherMembership(email, schoolId);
 
     const createdClass = await app.inject({
       method: "POST",

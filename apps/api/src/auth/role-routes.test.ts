@@ -8,7 +8,7 @@ import { prisma } from "../db.js";
 import { hashPassword } from "./password.js";
 import {
   deleteUsersByEmail,
-  grantSchoolMembership,
+  grantClassTeacherMembership,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -79,7 +79,7 @@ describe("role checks on class, task, and status routes", () => {
     });
     const teacherToken = (teacher.json() as { accessToken: string })
       .accessToken;
-    await grantSchoolMembership(teacherEmail, schoolId);
+    await grantClassTeacherMembership(teacherEmail, schoolId);
 
     const deniedSchool = await app.inject({
       method: "POST",

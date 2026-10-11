@@ -15,6 +15,13 @@ import {
   type TaskType,
 } from "@classroom-tracker/shared";
 import { ApiError, apiFetch } from "../api";
+import { notifyOutboxChanged } from "../components/OfflineBanner";
+import {
+  cacheClassGrid,
+  enqueueStatusOutbox,
+  isLikelyOfflineError,
+  readCachedClassGrid,
+} from "../offline";
 
 const TYPE_FILTERS: Array<{ value: "" | TaskType; label: string }> = [
   { value: "", label: "All" },
@@ -132,6 +139,14 @@ export function TickGridPage() {
     statusId: string;
     taskType: TaskType;
   } | null>(null);
+  const [marksEditor, setMarksEditor] = useState<{
+    statusId: string;
+    studentName: string;
+    taskTitle: string;
+    maxMarks: number;
+    currentMarks: number | null;
+  } | null>(null);
+  const [marksDraft, setMarksDraft] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const gridQuery = useQuery({
@@ -143,11 +158,21 @@ export function TickGridPage() {
       if (daysFilter != null) params.set("days", String(daysFilter));
       if (qFilter) params.set("q", qFilter);
       const qs = params.toString();
-      return classGridSchema.parse(
-        await apiFetch<unknown>(
-          `/classes/${classId}/grid${qs ? `?${qs}` : ""}`,
-        ),
-      );
+      try {
+        const grid = classGridSchema.parse(
+          await apiFetch<unknown>(
+            `/classes/${classId}/grid${qs ? `?${qs}` : ""}`,
+          ),
+        );
+        cacheClassGrid(classId, grid);
+        return grid;
+      } catch (error) {
+        const cached = readCachedClassGrid(classId);
+        if (cached && isLikelyOfflineError(error)) {
+          return cached;
+        }
+        throw error;
+      }
     },
   });
 
@@ -212,14 +237,31 @@ export function TickGridPage() {
           );
           queryClient.setQueryData<ClassGridDto>(queryKey, (old) => {
             if (!old) return old;
-            return {
+            const nextGrid = {
               ...old,
               statuses: old.statuses.map((row) =>
                 row.id === statusId ? { ...row, ...updated } : row,
               ),
             };
+            cacheClassGrid(classId, nextGrid);
+            return nextGrid;
           });
         } catch (error) {
+          if (isLikelyOfflineError(error)) {
+            enqueueStatusOutbox({
+              classId,
+              statusId,
+              status: next,
+              version: cell.version,
+              marks: extras?.marks,
+              partsDone: extras?.partsDone,
+            });
+            notifyOutboxChanged();
+            setSaveError("Offline — mark queued and will sync later.");
+            const queued = queryClient.getQueryData<ClassGridDto>(queryKey);
+            if (queued) cacheClassGrid(classId, queued);
+            return;
+          }
           setSaveError(
             error instanceof ApiError
               ? error.message
@@ -327,9 +369,7 @@ export function TickGridPage() {
             <button
               key={option.label}
               type="button"
-              onClick={() =>
-                patchFilters({ type: option.value || undefined })
-              }
+              onClick={() => patchFilters({ type: option.value || undefined })}
               className={`min-h-10 shrink-0 rounded-lg px-3 text-sm font-medium ${
                 (typeFilter ?? "") === option.value
                   ? "bg-[var(--accent)] text-white"
@@ -587,21 +627,17 @@ export function TickGridPage() {
                                 return;
                               }
                               if (task.type === "WEEKLY_TEST") {
-                                const raw = globalThis.prompt(
-                                  `Marks out of ${task.maxMarks ?? "?"}`,
+                                setMarksEditor({
+                                  statusId: cell.id,
+                                  studentName: student.name,
+                                  taskTitle: task.title,
+                                  maxMarks: task.maxMarks ?? 0,
+                                  currentMarks: cell.marks ?? null,
+                                });
+                                setMarksDraft(
                                   cell.marks != null ? String(cell.marks) : "",
                                 );
-                                if (raw == null) {
-                                  return;
-                                }
-                                const marks = Number(raw.trim());
-                                if (!Number.isInteger(marks)) {
-                                  setSaveError("Enter a whole-number mark.");
-                                  return;
-                                }
-                                void enqueueStatusUpdate(cell.id, "DONE", {
-                                  marks,
-                                });
+                                setSaveError(null);
                                 return;
                               }
                               if (task.type === "HOLIDAY_HOMEWORK") {
@@ -643,10 +679,111 @@ export function TickGridPage() {
             </table>
           </div>
           <p className="mt-3 px-1 text-xs text-[var(--muted)]">
-            Tap: homework done ↔ not done; test asks for marks; holiday advances
-            parts. Long-press: incomplete / absent.
+            Tap: homework done ↔ not done; test opens marks entry; holiday
+            advances parts. Long-press: incomplete / absent.
           </p>
         </>
+      )}
+
+      {marksEditor && (
+        <div
+          className="fixed inset-0 z-20 flex items-end bg-black/40 p-4 sm:items-center sm:justify-center"
+          role="presentation"
+          onClick={() => setMarksEditor(null)}
+        >
+          <form
+            className="w-full max-w-sm rounded-xl bg-[var(--surface)] p-4 shadow-lg"
+            role="dialog"
+            aria-label="Enter marks"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const raw = marksDraft.trim();
+              if (raw.length === 0) {
+                setSaveError("Enter marks, or use Clear.");
+                return;
+              }
+              const marks = Number(raw);
+              if (!Number.isInteger(marks)) {
+                setSaveError("Enter a whole-number mark.");
+                return;
+              }
+              if (marks < 0 || marks > marksEditor.maxMarks) {
+                setSaveError(
+                  `Marks must be between 0 and ${marksEditor.maxMarks}.`,
+                );
+                return;
+              }
+              setSaveError(null);
+              void enqueueStatusUpdate(marksEditor.statusId, "DONE", {
+                marks,
+              });
+              setMarksEditor(null);
+            }}
+          >
+            <p className="text-sm font-medium text-[var(--ink)]">
+              {marksEditor.studentName}
+            </p>
+            <p className="mt-0.5 text-sm text-[var(--muted)]">
+              {marksEditor.taskTitle} · out of {marksEditor.maxMarks}
+            </p>
+            <label className="mt-4 block text-sm">
+              <span className="text-[var(--muted)]">Marks</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={marksEditor.maxMarks}
+                step={1}
+                autoFocus
+                value={marksDraft}
+                onChange={(e) => setMarksDraft(e.target.value)}
+                placeholder={`0–${marksEditor.maxMarks}`}
+                className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3 text-lg"
+              />
+            </label>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="submit"
+                className="min-h-12 rounded-lg bg-[var(--accent)] text-sm font-medium text-white"
+              >
+                Save marks
+              </button>
+              <button
+                type="button"
+                className="min-h-12 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+                onClick={() => {
+                  if (marksEditor.maxMarks > 0) {
+                    setMarksDraft(String(marksEditor.maxMarks));
+                  }
+                }}
+              >
+                Full marks
+              </button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="min-h-11 rounded-lg border border-emerald-900/10 text-sm"
+                onClick={() => {
+                  void enqueueStatusUpdate(marksEditor.statusId, "PENDING", {
+                    marks: null,
+                  });
+                  setMarksEditor(null);
+                }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="min-h-11 text-sm text-[var(--muted)] underline"
+                onClick={() => setMarksEditor(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {menu && (

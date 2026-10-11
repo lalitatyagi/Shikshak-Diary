@@ -8,8 +8,8 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**V2 Step 5 complete:** pagination and filtering on students, tasks, and the
-tick grid. See [docs/DEPLOY.md](docs/DEPLOY.md) for optional deploy later.
+**V3 Step 2 complete:** RBAC for class teachers vs subject teachers (roster and
+parent links). See [docs/DEPLOY.md](docs/DEPLOY.md) for optional deploy later.
 
 Live demo: _set URLs after first deploy_  
 - Web: `https://<your-app>.vercel.app`  
@@ -36,11 +36,11 @@ Demo teacher login (after `npm run db:seed` against Neon):
 | --- | --- | --- |
 | GET | `/schools` | Schools the caller belongs to (ADMIN: all) |
 | POST | `/schools` | ADMIN creates a school |
-| POST | `/schools/:schoolId/members` | ADMIN invites a registered teacher by email |
+| POST | `/schools/:schoolId/members` | ADMIN invites by email; optional `role`: `TEACHER` \| `CLASS_TEACHER` |
 | GET | `/classes` | Classes assigned to the teacher |
 | POST | `/classes` | Create a class in a school the teacher belongs to |
 | GET | `/classes/:classId/students` | Paginated enrolled students (`page`, `pageSize` default 40, optional `q` name/roll) |
-| POST | `/classes/:classId/students/import` | CSV import; returns per-row errors |
+| POST | `/classes/:classId/students/import` | CSV import — **CLASS_TEACHER** or **ADMIN** only |
 
 CSV columns: `rollNumber`, `name`, and optional `parentContact`.
 A roll number that already belongs to a student in a class you cannot access is a per-row error. The import does not rename that student or enroll them. One import accepts at most 200 student rows.
@@ -93,9 +93,9 @@ Seed marks 3 demo students as defaulters so the list is not empty.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/classes/:classId/students/:studentId/parent-link` | Active-link metadata (no raw token) |
-| POST | `/classes/:classId/students/:studentId/parent-link` | Create or rotate; returns raw `token` + `path` once (`expiresInDays` 1–365, default 90) |
-| DELETE | `/classes/:classId/students/:studentId/parent-link` | Revoke the current link |
+| GET | `/classes/:classId/students/:studentId/parent-link` | Active-link metadata — **CLASS_TEACHER** / **ADMIN** |
+| POST | `/classes/:classId/students/:studentId/parent-link` | Create or rotate — **CLASS_TEACHER** / **ADMIN** |
+| DELETE | `/classes/:classId/students/:studentId/parent-link` | Revoke — **CLASS_TEACHER** / **ADMIN** |
 | GET | `/parent/:token/report?days=30` | **Public** read-only report (stricter rate limit; 404 if expired/revoked) |
 | GET | `/parent/:token/report.csv?days=30` | **Public** CSV of the same report |
 
@@ -120,6 +120,10 @@ npm run dev:web
 
 Open http://localhost:5173 → sign in → pick a class → tick grid, students
 (report + parent link), or defaulters.
+
+**PWA:** production builds register a service worker (`vite-plugin-pwa`).
+Install from the browser (“Add to Home Screen”). The tick grid caches the last
+successful load and queues marks while offline, then syncs on reconnect.
 
 ## Architecture (current)
 
@@ -154,6 +158,8 @@ Deploy runbook: [docs/DEPLOY.md](docs/DEPLOY.md) (`render.yaml`, `vercel.json`).
 | Parent link = hashed secret URL, not parent accounts | Teacher can share WhatsApp-friendly read-only report without registering parents | Anyone with the URL can view until revoke/expiry; no parent login yet |
 | CSV on the API; PDF via browser print | Teachers get Excel-friendly files without a PDF dependency | Layout of “Save as PDF” depends on the browser print engine |
 | Filter the grid; paginate list endpoints | Phone UI stays fast as task history grows; marking still shows a full student column set when unfiltered | Students/tasks list response shape is now `{ items, page, pageSize, total, totalPages }` (breaking vs bare arrays) |
+| PWA shell + local outbox for marks | Teacher can keep ticking during a classroom dead zone | Only status PUTs are queued; create-task and other writes still need network |
+| Class teacher vs subject teacher RBAC | Roster import and parent links stay with the class teacher; subject teachers still mark the grid | Register still creates `TEACHER`; an admin invite sets `CLASS_TEACHER` when needed |
 | Split deploy (Vercel + Render + Neon) | Matches each piece’s strengths; free tiers for a portfolio demo | Cross-origin cookies need SameSite=None; Render free tier cold-starts |
 | Typed fields on one Task / TaskStatus | Weekly tests and holiday parts reuse the same tables | App validation must stay strict per type |
 

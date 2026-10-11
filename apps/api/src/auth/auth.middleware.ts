@@ -7,6 +7,8 @@ import type {
 import { prisma } from "../db.js";
 import { verifyAccessToken } from "./tokens.js";
 
+export { teacherRoles, classManagerRoles } from "@classroom-tracker/shared";
+
 /** Claims available after requireAuth (from the access JWT). */
 export type RequestUser = {
   id: string;
@@ -56,9 +58,6 @@ export const requireAuth: preHandlerHookHandler = async (
     return reply.status(401).send({ error: "Invalid or expired access token" });
   }
 };
-
-/** Roles that teach or administer a class. */
-export const teacherRoles = ["TEACHER", "CLASS_TEACHER", "ADMIN"] as const;
 
 /** Use after requireAuth. */
 export function requireRole(...allowed: Role[]): preHandlerHookHandler {

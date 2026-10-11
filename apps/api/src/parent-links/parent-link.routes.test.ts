@@ -6,7 +6,7 @@ import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
 import {
   deleteUsersByEmail,
-  grantSchoolMembership,
+  grantClassTeacherMembership,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -62,7 +62,7 @@ describe("parent link routes", () => {
       })
     ).json().accessToken as string;
 
-    await grantSchoolMembership(email, schoolId);
+    await grantClassTeacherMembership(email, schoolId);
 
     classId = (
       await app.inject({
@@ -252,6 +252,7 @@ describe("parent link routes", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toMatch(/text\/csv/);
     expect(res.body).toContain("Parent HW");
-    expect(res.body).toContain("DONE");
+    expect(res.body).toContain("Homework");
+    expect(res.body).toContain("Done");
   });
 });

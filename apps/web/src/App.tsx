@@ -8,6 +8,7 @@ import { StudentsPage } from "./pages/StudentsPage";
 import { StudentReportPage } from "./pages/StudentReportPage";
 import { ParentReportPage } from "./pages/ParentReportPage";
 import { HealthPage } from "./pages/HealthPage";
+import { OfflineBanner } from "./components/OfflineBanner";
 import type { ReactNode } from "react";
 
 function Protected({ children }: { children: ReactNode }) {
@@ -28,6 +29,7 @@ function Protected({ children }: { children: ReactNode }) {
 export function App() {
   return (
     <AuthProvider>
+      <OfflineBanner />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/health" element={<HealthPage />} />

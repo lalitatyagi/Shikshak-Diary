@@ -7,7 +7,7 @@ import { prisma } from "../db.js";
 import { hashPassword } from "../auth/password.js";
 import {
   deleteUsersByEmail,
-  grantSchoolMembership,
+  grantClassTeacherMembership,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -62,7 +62,7 @@ describe("tick grid status routes", () => {
       })
     ).json().accessToken as string;
 
-    await grantSchoolMembership(email, schoolId);
+    await grantClassTeacherMembership(email, schoolId);
 
     classId = (
       await app.inject({

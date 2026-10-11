@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Classroom Tracker">
+  <rect width="512" height="512" rx="96" fill="#0f6b4c"/>
+  <text
+    x="256"
+    y="310"
+    text-anchor="middle"
+    font-size="200"
+    font-family="Segoe UI, Helvetica Neue, sans-serif"
+    font-weight="700"
+    fill="#ffffff"
+  >CT</text>
+</svg>

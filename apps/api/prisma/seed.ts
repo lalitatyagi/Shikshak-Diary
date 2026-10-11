@@ -49,7 +49,7 @@ async function seed(): Promise<void> {
       name: SEED.teacher.name,
       email: SEED.teacher.email,
       passwordHash,
-      role: Role.TEACHER,
+      role: Role.CLASS_TEACHER,
     },
   });
 

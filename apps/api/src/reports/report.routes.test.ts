@@ -6,7 +6,7 @@ import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
 import {
   deleteUsersByEmail,
-  grantSchoolMembership,
+  grantClassTeacherMembership,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -63,7 +63,7 @@ describe("report routes", () => {
       })
     ).json().accessToken as string;
 
-    await grantSchoolMembership(email, schoolId);
+    await grantClassTeacherMembership(email, schoolId);
 
     classId = (
       await app.inject({
@@ -186,8 +186,9 @@ describe("report routes", () => {
     expect(body.summary.notDoneCount).toBe(1);
     expect(body.summary.weeklyTestCount).toBe(1);
     expect(body.summary.weeklyTestAvgMarks).toBe(17);
-    expect(body.tasks.some((t) => t.taskId === weeklyTaskId && t.marks === 17))
-      .toBe(true);
+    expect(
+      body.tasks.some((t) => t.taskId === weeklyTaskId && t.marks === 17),
+    ).toBe(true);
   });
 
   it("returns 404 when student is not enrolled", async () => {
@@ -226,8 +227,8 @@ describe("report routes", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toMatch(/text\/csv/);
     expect(res.headers["content-disposition"]).toMatch(/attachment/);
-    expect(res.body).toContain("rollNumber,name,");
+    expect(res.body).toContain("Roll no.,Student name,Work,Type");
     expect(res.body).toContain("Unit quiz");
-    expect(res.body).toContain("17");
+    expect(res.body).toContain("Scored 17 out of 20");
   });
 });

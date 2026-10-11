@@ -6,6 +6,8 @@ export const createSchoolBodySchema = z.object({
 
 export const inviteSchoolMemberBodySchema = z.object({
   email: z.string().trim().email(),
+  /** Admin may promote an invited teacher to class teacher. */
+  role: z.enum(["TEACHER", "CLASS_TEACHER"]).optional(),
 });
 
 export const createClassBodySchema = z.object({

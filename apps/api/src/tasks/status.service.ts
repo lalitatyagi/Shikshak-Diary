@@ -145,9 +145,9 @@ export async function getClassGrid(
   });
 }
 
-function studentSearchWhere(q?: string):
-  | { OR: Array<Record<string, unknown>> }
-  | undefined {
+function studentSearchWhere(
+  q?: string,
+): { OR: Array<Record<string, unknown>> } | undefined {
   if (!q) return undefined;
   const roll = Number(q);
   const or: Array<Record<string, unknown>> = [

@@ -1,4 +1,7 @@
-import type { StudentReport, StudentReportTask } from "@classroom-tracker/shared";
+import type {
+  StudentReport,
+  StudentReportTask,
+} from "@classroom-tracker/shared";
 
 function statusLabel(status: StudentReportTask["status"]): string {
   return status.replaceAll("_", " ");
@@ -74,13 +77,7 @@ export function StudentReportView({ report }: { report: StudentReport }) {
   );
 }
 
-function Stat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | string;
-}) {
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-xl bg-[var(--surface)] px-3 py-3 shadow-sm">
       <p className="text-xs text-[var(--muted)]">{label}</p>
