@@ -8,8 +8,8 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**V3 Step 2 complete:** RBAC for class teachers vs subject teachers (roster and
-parent links). See [docs/DEPLOY.md](docs/DEPLOY.md) for optional deploy later.
+**V3 Step 3 complete:** Playwright smoke E2E (login → tick grid). See
+[docs/DEPLOY.md](docs/DEPLOY.md) for optional deploy later.
 
 Live demo: _set URLs after first deploy_  
 - Web: `https://<your-app>.vercel.app`  
@@ -189,8 +189,15 @@ npm run dev:web
 | Command | What it does |
 | --- | --- |
 | `npm run lint` / `typecheck` / `test` | Quality checks |
+| `npm run test:e2e` | Playwright smoke (starts API + web; needs `DATABASE_URL` + JWT secrets) |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:seed` | Seed demo school/teacher/class/40 students |
+
+First-time E2E browsers (once per machine):
+
+```bash
+npx playwright install chromium
+```
 
 ## Out of scope
 
