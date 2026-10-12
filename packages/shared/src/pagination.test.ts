@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   gridQuerySchema,
+  paginatedResponseSchema,
   studentsListQuerySchema,
+  tasksListQuerySchema,
   toPaginated,
 } from "./pagination.js";
 
@@ -41,5 +44,30 @@ describe("toPaginated", () => {
       totalPages: 2,
     });
     expect(toPaginated([], 0, 1, 40).totalPages).toBe(0);
+  });
+});
+
+describe("tasksListQuerySchema", () => {
+  it("accepts an optional task type filter", () => {
+    expect(tasksListQuerySchema.parse({ type: "NOTEBOOK_CHECK" })).toEqual({
+      page: 1,
+      pageSize: 40,
+      type: "NOTEBOOK_CHECK",
+    });
+  });
+});
+
+describe("paginatedResponseSchema", () => {
+  it("validates a list envelope", () => {
+    const schema = paginatedResponseSchema(z.string());
+    expect(
+      schema.parse({
+        items: ["a"],
+        page: 1,
+        pageSize: 40,
+        total: 1,
+        totalPages: 1,
+      }),
+    ).toMatchObject({ total: 1, items: ["a"] });
   });
 });

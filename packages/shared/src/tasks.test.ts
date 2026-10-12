@@ -93,6 +93,37 @@ describe("createTaskBodySchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects cross-type fields and bad calendar dates", () => {
+    expect(
+      createTaskBodySchema.safeParse({
+        ...base,
+        type: "WEEKLY_TEST",
+        maxMarks: 20,
+        totalParts: 3,
+      }).success,
+    ).toBe(false);
+    expect(
+      createTaskBodySchema.safeParse({
+        ...base,
+        type: "HOLIDAY_HOMEWORK",
+        totalParts: 5,
+        maxMarks: 10,
+      }).success,
+    ).toBe(false);
+    expect(
+      createTaskBodySchema.safeParse({
+        ...base,
+        totalParts: 2,
+      }).success,
+    ).toBe(false);
+    expect(
+      createTaskBodySchema.safeParse({
+        ...base,
+        assignedOn: "nope",
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("validateMarksAndParts", () => {
@@ -113,6 +144,22 @@ describe("validateMarksAndParts", () => {
         marks: 18,
       }),
     ).toBeNull();
+    expect(
+      validateMarksAndParts({
+        type: "WEEKLY_TEST",
+        maxMarks: 20,
+        totalParts: null,
+        marks: 1.5,
+      }),
+    ).toMatch(/non-negative integer/);
+    expect(
+      validateMarksAndParts({
+        type: "WEEKLY_TEST",
+        maxMarks: 20,
+        totalParts: null,
+        partsDone: 1,
+      }),
+    ).toMatch(/HOLIDAY_HOMEWORK/);
   });
 
   it("caps partsDone at totalParts for holiday homework", () => {
@@ -132,6 +179,22 @@ describe("validateMarksAndParts", () => {
         partsDone: 3,
       }),
     ).toBeNull();
+    expect(
+      validateMarksAndParts({
+        type: "HOLIDAY_HOMEWORK",
+        maxMarks: null,
+        totalParts: 5,
+        marks: 2,
+      }),
+    ).toMatch(/WEEKLY_TEST/);
+    expect(
+      validateMarksAndParts({
+        type: "HOLIDAY_HOMEWORK",
+        maxMarks: null,
+        totalParts: 5,
+        partsDone: -1,
+      }),
+    ).toMatch(/non-negative integer/);
   });
 
   it("rejects marks on notebook checks", () => {
@@ -143,5 +206,20 @@ describe("validateMarksAndParts", () => {
         marks: 5,
       }),
     ).toMatch(/WEEKLY_TEST/);
+    expect(
+      validateMarksAndParts({
+        type: "DAILY_HOMEWORK",
+        maxMarks: null,
+        totalParts: null,
+        partsDone: 1,
+      }),
+    ).toMatch(/HOLIDAY_HOMEWORK/);
+    expect(
+      validateMarksAndParts({
+        type: "DAILY_HOMEWORK",
+        maxMarks: null,
+        totalParts: null,
+      }),
+    ).toBeNull();
   });
 });

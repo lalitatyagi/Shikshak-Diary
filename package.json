@@ -19,6 +19,7 @@
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "test:coverage": "npm run test:coverage -w @classroom-tracker/shared",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:up": "docker compose up -d",

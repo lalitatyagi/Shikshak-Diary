@@ -69,6 +69,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Shared package coverage
+        run: npm run test:coverage
+
   e2e:
     name: Playwright smoke
     runs-on: ubuntu-latest

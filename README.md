@@ -8,7 +8,7 @@ Built as a portfolio project by a BSc CS student and former teacher.
 
 ## Status
 
-**V3 Step 3 complete:** Playwright smoke E2E (login → tick grid). See
+**V3 Step 4 complete:** Shared-package coverage floor (Vitest + v8). See
 [docs/DEPLOY.md](docs/DEPLOY.md) for optional deploy later.
 
 Live demo: _set URLs after first deploy_  
@@ -160,6 +160,7 @@ Deploy runbook: [docs/DEPLOY.md](docs/DEPLOY.md) (`render.yaml`, `vercel.json`).
 | Filter the grid; paginate list endpoints | Phone UI stays fast as task history grows; marking still shows a full student column set when unfiltered | Students/tasks list response shape is now `{ items, page, pageSize, total, totalPages }` (breaking vs bare arrays) |
 | PWA shell + local outbox for marks | Teacher can keep ticking during a classroom dead zone | Only status PUTs are queued; create-task and other writes still need network |
 | Class teacher vs subject teacher RBAC | Roster import and parent links stay with the class teacher; subject teachers still mark the grid | Register still creates `TEACHER`; an admin invite sets `CLASS_TEACHER` when needed |
+| Coverage floor on `@classroom-tracker/shared` | Zod schemas and status rules are the product contract; CI fails if they drift untested | API/web UI coverage is still integration-style, not a global % gate |
 | Split deploy (Vercel + Render + Neon) | Matches each piece’s strengths; free tiers for a portfolio demo | Cross-origin cookies need SameSite=None; Render free tier cold-starts |
 | Typed fields on one Task / TaskStatus | Weekly tests and holiday parts reuse the same tables | App validation must stay strict per type |
 
@@ -189,6 +190,7 @@ npm run dev:web
 | Command | What it does |
 | --- | --- |
 | `npm run lint` / `typecheck` / `test` | Quality checks |
+| `npm run test:coverage` | Shared Zod/rules coverage (90% lines/functions/statements, 85% branches) |
 | `npm run test:e2e` | Playwright smoke (starts API + web; needs `DATABASE_URL` + JWT secrets) |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:seed` | Seed demo school/teacher/class/40 students |

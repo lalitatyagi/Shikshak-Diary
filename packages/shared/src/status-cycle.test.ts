@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowedStatusesForType,
   completeStatusForType,
   isStatusAllowedForType,
   longPressStatuses,
+  nextStatus,
   primaryTapStatus,
 } from "./status-cycle.js";
 
@@ -39,5 +41,28 @@ describe("completeStatusForType", () => {
   it("maps bulk complete to DONE or CHECKED by type", () => {
     expect(completeStatusForType("DAILY_HOMEWORK")).toBe("DONE");
     expect(completeStatusForType("NOTEBOOK_CHECK")).toBe("CHECKED");
+  });
+});
+
+describe("allowedStatusesForType / nextStatus", () => {
+  it("lists the five statuses teachers can set per type", () => {
+    expect(allowedStatusesForType("DAILY_HOMEWORK")).toEqual([
+      "PENDING",
+      "DONE",
+      "NOT_DONE",
+      "INCOMPLETE",
+      "ABSENT",
+    ]);
+    expect(allowedStatusesForType("NOTEBOOK_CHECK")).toEqual([
+      "PENDING",
+      "CHECKED",
+      "NOT_CHECKED",
+      "INCOMPLETE",
+      "ABSENT",
+    ]);
+  });
+
+  it("keeps nextStatus as an alias of primaryTapStatus", () => {
+    expect(nextStatus("WEEKLY_TEST", "INCOMPLETE")).toBe("DONE");
   });
 });

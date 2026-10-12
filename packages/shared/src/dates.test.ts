@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  addKolkataCalendarDays,
+  defaultersWindow,
   isPastDueInKolkata,
   kolkataCalendarDateToInstant,
   parseToKolkataCalendarDate,
+  startOfTodayKolkata,
   toKolkataCalendarDate,
 } from "./dates.js";
 
@@ -43,5 +46,23 @@ describe("Kolkata calendar dates", () => {
     expect(
       isPastDueInKolkata(kolkataCalendarDateToInstant("2026-10-03"), now),
     ).toBe(false);
+  });
+
+  it("rejects bad calendar strings and invalid day windows", () => {
+    expect(() => kolkataCalendarDateToInstant("03-10-2026")).toThrow(
+      /YYYY-MM-DD/,
+    );
+    expect(() => parseToKolkataCalendarDate("not-a-date")).toThrow(/Invalid/);
+    expect(() => defaultersWindow(0)).toThrow(/positive integer/);
+  });
+
+  it("shifts Kolkata days and builds a defaulters window", () => {
+    expect(addKolkataCalendarDays("2026-10-03", -2)).toBe("2026-10-01");
+    const now = new Date("2026-10-03T14:30:00.000Z");
+    expect(defaultersWindow(7, now)).toEqual({
+      fromDate: "2026-09-27",
+      toDate: "2026-10-03",
+    });
+    expect(toKolkataCalendarDate(startOfTodayKolkata(now))).toBe("2026-10-03");
   });
 });
