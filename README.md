@@ -12,13 +12,15 @@ classroom — marking the whole class should take under a minute.
 ## Status
 
 **V3 complete** — usable V1/V2 product plus PWA offline marks, class-teacher
-RBAC, Playwright smoke E2E, and a shared-package coverage floor. Deploy is
-optional: [docs/DEPLOY.md](docs/DEPLOY.md).
+RBAC, Playwright smoke E2E, and a shared-package coverage floor.
 
-Live demo: _set URLs after first deploy_
+**Deploy (in progress):** Neon DB is migrated and seeded. Apply the Render
+Blueprint + Vercel project next — checklist in [docs/DEPLOY.md](docs/DEPLOY.md).
+
+Live demo: _set URLs after Render + Vercel_
 
 - Web: `https://<your-app>.vercel.app`
-- API health: `https://<your-api>.onrender.com/health`
+- API health: `https://classroom-tracker-api.onrender.com/health` _(expected Blueprint name)_
 
 Demo teacher (after `npm run db:seed`; seed refuses `NODE_ENV=production`):
 
