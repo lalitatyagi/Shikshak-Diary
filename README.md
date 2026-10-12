@@ -1,168 +1,99 @@
 # Classroom Tracker
 
 Mobile-first web app for school teachers to track day-to-day classroom work
-(homework, notebook checks, tests) that tools like Google Classroom don't handle
-well in physical classrooms.
+that tools like Google Classroom don't handle well in **physical** classrooms:
+who did the homework, which notebooks were checked, weekly-test marks, and
+holiday homework parts.
 
-Built as a portfolio project by a BSc CS student and former teacher.
+Built as a portfolio project by a BSc CS student and former teacher. The primary
+user is a teacher marking a class of ~40 students on a phone, standing in a
+classroom — marking the whole class should take under a minute.
 
 ## Status
 
-**V3 Step 4 complete:** Shared-package coverage floor (Vitest + v8). See
-[docs/DEPLOY.md](docs/DEPLOY.md) for optional deploy later.
+**V3 complete** — usable V1/V2 product plus PWA offline marks, class-teacher
+RBAC, Playwright smoke E2E, and a shared-package coverage floor. Deploy is
+optional: [docs/DEPLOY.md](docs/DEPLOY.md).
 
-Live demo: _set URLs after first deploy_  
-- Web: `https://<your-app>.vercel.app`  
+Live demo: _set URLs after first deploy_
+
+- Web: `https://<your-app>.vercel.app`
 - API health: `https://<your-api>.onrender.com/health`
 
-Demo teacher login (after `npm run db:seed` against Neon):
+Demo teacher (after `npm run db:seed`; seed refuses `NODE_ENV=production`):
 
 - Email: `teacher@demo.local`
-- Password: `Teacher123!` (local/demo seed only — `npm run db:seed` refuses to run when `NODE_ENV` is `production`)
+- Password: `Teacher123!`
 
-## Auth API
+## Screenshots
 
-| Method | Path | Notes |
-| --- | --- | --- |
-| POST | `/auth/register` | Creates a `TEACHER` (ignores any `role` in body) |
-| POST | `/auth/login` | Returns `{ accessToken, user }`, sets refresh cookie |
-| POST | `/auth/refresh` | Rotates tokens using httpOnly `refreshToken` cookie |
-| POST | `/auth/logout` | Revokes the refresh token and clears the cookie |
-| GET | `/auth/me` | Requires `Authorization: Bearer <accessToken>` |
+Phone-width captures from the seeded demo class **8-B** (40 students).
 
-## Classes & students API
+| Login | Classes |
+| --- | --- |
+| ![Login](docs/screenshots/01-login.png) | ![Classes](docs/screenshots/02-classes.png) |
 
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/schools` | Schools the caller belongs to (ADMIN: all) |
-| POST | `/schools` | ADMIN creates a school |
-| POST | `/schools/:schoolId/members` | ADMIN invites by email; optional `role`: `TEACHER` \| `CLASS_TEACHER` |
-| GET | `/classes` | Classes assigned to the teacher |
-| POST | `/classes` | Create a class in a school the teacher belongs to |
-| GET | `/classes/:classId/students` | Paginated enrolled students (`page`, `pageSize` default 40, optional `q` name/roll) |
-| POST | `/classes/:classId/students/import` | CSV import — **CLASS_TEACHER** or **ADMIN** only |
+| Tick grid | Defaulters |
+| --- | --- |
+| ![Tick grid](docs/screenshots/03-tick-grid.png) | ![Defaulters](docs/screenshots/04-defaulters.png) |
 
-CSV columns: `rollNumber`, `name`, and optional `parentContact`.
-A roll number that already belongs to a student in a class you cannot access is a per-row error. The import does not rename that student or enroll them. One import accepts at most 200 student rows.
+## What it does
 
-Example body:
+- **Tick grid** — students × tasks; tap to cycle status; bulk “mark all done”
+- **Task types** — daily homework, notebook check, weekly test (marks), holiday homework (parts)
+- **Defaulters** — students with 2+ `NOT_DONE` / `NOT_CHECKED` in the last N Kolkata days
+- **Student report** — per-student summary; parent share link (hashed URL); CSV / print PDF
+- **Offline marks** — PWA caches the last grid; status taps queue and sync on reconnect
+- **RBAC** — class teachers manage roster + parent links; subject teachers mark the grid
 
-```json
-{
-  "csv": "rollNumber,name,parentContact\n1,Aarav Sharma,\n2,Ananya Verma,9800000002\n"
-}
-```
+## Measurable numbers
 
-## Tasks API (V1)
+| Metric | Value |
+| --- | --- |
+| Seeded demo class | 1 school, 1 teacher, **40** students, 2 sample tasks |
+| Unit / integration tests | **167** across api + web + shared (`npm test`) |
+| Shared package coverage | **~98%** lines (CI floor: 90% lines/functions/statements, 85% branches) |
+| Playwright smoke | 1 browser flow: login → tick grid → mark a cell |
+| Prisma models | 12 (unified `Task` / `TaskStatus` for all activity types) |
+| Target class size | ~40 students; full-class marking under a minute on a phone |
 
-| Method | Path | Notes |
-| --- | --- | --- |
-| POST | `/classes/:classId/tasks` | Create task + PENDING statuses (transaction) |
-| GET | `/classes/:classId/tasks` | Paginated tasks (`page`, `pageSize`, optional `type`) |
-| GET | `/tasks/:taskId` | Task detail with `statusCount` |
-
-Create types: `DAILY_HOMEWORK`, `NOTEBOOK_CHECK`, `WEEKLY_TEST` (requires `maxMarks`),
-`HOLIDAY_HOMEWORK` (requires `totalParts`).  
-`PUT /task-statuses/:id` accepts optional `marks` / `partsDone` (type-checked).  
-`assignedOn` / `dueOn` are **Asia/Kolkata calendar dates** (`YYYY-MM-DD`).  
-Late student imports get `PENDING` rows for open (not past-due) tasks.
-
-## Tick grid API
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/classes/:classId/grid` | Students × tasks × statuses (+ `defaultSubjectId`). Optional filters: `type`, `days` (assignedOn lookback), `q` (student name/roll) |
-| PUT | `/task-statuses/:statusId` | Body `{ status, version }` — queued taps avoid 409 |
-| POST | `/tasks/:taskId/mark-all-complete` | Only updates **PENDING** → DONE/CHECKED |
-
-## Defaulters API
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/classes/:classId/defaulters?days=7` | Students with **2+** `NOT_DONE` / `NOT_CHECKED` on tasks assigned in the last N Kolkata days (`days` 1–90, default 7) |
-
-Seed marks 3 demo students as defaulters so the list is not empty.
-
-## Student report API
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/classes/:classId/students/:studentId/report?days=30` | Summary counts + task rows for one enrolled student (`days` 1–365, default 30). Includes `weeklyTestAvgMarks` when scored tests exist. |
-
-## Parent link API
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/classes/:classId/students/:studentId/parent-link` | Active-link metadata — **CLASS_TEACHER** / **ADMIN** |
-| POST | `/classes/:classId/students/:studentId/parent-link` | Create or rotate — **CLASS_TEACHER** / **ADMIN** |
-| DELETE | `/classes/:classId/students/:studentId/parent-link` | Revoke — **CLASS_TEACHER** / **ADMIN** |
-| GET | `/parent/:token/report?days=30` | **Public** read-only report (stricter rate limit; 404 if expired/revoked) |
-| GET | `/parent/:token/report.csv?days=30` | **Public** CSV of the same report |
-
-Only the SHA-256 hash of the token is stored. Rotating invalidates the previous URL.
-Web parents open `/p/<token>` (no login).
-
-## Export API
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/classes/:classId/students/:studentId/report.csv?days=30` | Teacher CSV of the student report (UTF-8 BOM for Excel) |
-| GET | `/classes/:classId/defaulters.csv?days=7` | Teacher CSV of the defaulters list |
-
-PDF: use **Print / PDF** in the web UI (browser print dialog → Save as PDF). No server-side PDF library.
-
-## Web UI
-
-```bash
-npm run dev:api
-npm run dev:web
-```
-
-Open http://localhost:5173 → sign in → pick a class → tick grid, students
-(report + parent link), or defaulters.
-
-**PWA:** production builds register a service worker (`vite-plugin-pwa`).
-Install from the browser (“Add to Home Screen”). The tick grid caches the last
-successful load and queues marks while offline, then syncs on reconnect.
-
-## Architecture (current)
+## Architecture
 
 ```
-apps/web  (React + Vite)  →  Vercel
+apps/web  (React + Vite + PWA)  →  Vercel
     |  VITE_API_BASE_URL + credentials
     v
-apps/api  (Fastify + Prisma + JWT auth)  →  Render
+apps/api  (Fastify + Prisma + JWT)  →  Render
     |
     v
 PostgreSQL  →  Neon  (Docker Compose for local)
-packages/shared  (Zod schemas + enums shared by web + api)
+packages/shared  (Zod schemas + status rules shared by web + api)
 ```
 
-Deploy runbook: [docs/DEPLOY.md](docs/DEPLOY.md) (`render.yaml`, `vercel.json`).
+CI (GitHub Actions): lint, format, typecheck, build, unit tests, shared
+coverage, Playwright smoke against Postgres.
 
-## Design decisions so far
+## Design decisions
 
 | Decision | Why | Trade-off |
 | --- | --- | --- |
 | npm workspaces monorepo | Share Zod types between web and API; one CI pipeline | Slightly heavier than two separate repos |
 | Unified task model | One `Task` + `TaskStatus` for all activity types | Type rules live in application code |
-| Short-lived access JWT + hashed refresh sessions | The cookie lifetime follows `JWT_REFRESH_TTL`. Each refresh revokes the previous token, and logout revokes it too | A stolen refresh token works only until the next refresh or logout |
-| Single-flight refresh on 401 | One expired access token does not log the teacher out mid-class; parallel calls share one refresh and retry once | If refresh fails, the session is cleared and the browser goes to login |
-| CORS allowlist, helmet, and login rate limit | The API does not reflect arbitrary origins with cookies, and login/register are capped per IP | Local `.env` must list the web origin in `CORS_ORIGINS` |
-| School membership, not open bootstrap | An admin creates the school and invites teachers. A new account with no membership sees no schools and cannot create a class in someone else's. CSV import will not update a student enrolled in a class the caller cannot access; that roll is a per-row error | A teacher cannot self-join a school. Someone with the ADMIN role has to invite them |
-| Partial CSV import with per-row errors | Teacher can fix bad rows without redoing the whole file | Class may be half-imported until they re-run |
-| Task + statuses created in one transaction | No task without a full PENDING grid for the class | Large classes = bigger write; still fine for ~40 students |
-| Optimistic status cycle + version check | Feels instant on a phone; 409 if another update won | Needs refresh/invalidate after conflicts |
-| SQL aggregation for defaulters | One query with `HAVING COUNT(*) >= 2`; cheap for ~40 students | Miss criteria are status-based, not “late relative to due date” yet |
-| Student report reuses defaulters date window | Same Kolkata `days` lookback; one query per student | Not a class-wide export yet (CSV/PDF is a later V2 step) |
-| Parent link = hashed secret URL, not parent accounts | Teacher can share WhatsApp-friendly read-only report without registering parents | Anyone with the URL can view until revoke/expiry; no parent login yet |
-| CSV on the API; PDF via browser print | Teachers get Excel-friendly files without a PDF dependency | Layout of “Save as PDF” depends on the browser print engine |
-| Filter the grid; paginate list endpoints | Phone UI stays fast as task history grows; marking still shows a full student column set when unfiltered | Students/tasks list response shape is now `{ items, page, pageSize, total, totalPages }` (breaking vs bare arrays) |
-| PWA shell + local outbox for marks | Teacher can keep ticking during a classroom dead zone | Only status PUTs are queued; create-task and other writes still need network |
-| Class teacher vs subject teacher RBAC | Roster import and parent links stay with the class teacher; subject teachers still mark the grid | Register still creates `TEACHER`; an admin invite sets `CLASS_TEACHER` when needed |
-| Coverage floor on `@classroom-tracker/shared` | Zod schemas and status rules are the product contract; CI fails if they drift untested | API/web UI coverage is still integration-style, not a global % gate |
-| Split deploy (Vercel + Render + Neon) | Matches each piece’s strengths; free tiers for a portfolio demo | Cross-origin cookies need SameSite=None; Render free tier cold-starts |
-| Typed fields on one Task / TaskStatus | Weekly tests and holiday parts reuse the same tables | App validation must stay strict per type |
+| Short-lived access JWT + hashed refresh sessions | Cookie lifetime follows `JWT_REFRESH_TTL`; refresh rotates; logout revokes | A stolen refresh token works only until the next refresh or logout |
+| Single-flight refresh on 401 | One expired access token does not log the teacher out mid-class | If refresh fails, the session clears and the browser goes to login |
+| CORS allowlist, helmet, and login rate limit | Cookies are origin-scoped; login/register capped per IP | Local `.env` must list the web origin in `CORS_ORIGINS` |
+| School membership, not open bootstrap | Admin creates the school and invites teachers | A teacher cannot self-join a school |
+| Partial CSV import with per-row errors | Fix bad rows without redoing the whole file | Class may be half-imported until they re-run |
+| Task + statuses in one transaction | No task without a full PENDING grid | Large classes = bigger write; fine for ~40 |
+| Optimistic status cycle + version check | Feels instant on a phone; 409 if another update won | Needs refresh after conflicts |
+| SQL aggregation for defaulters | One query with `HAVING COUNT(*) >= 2` | Miss criteria are status-based, not “late vs due date” |
+| Parent link = hashed secret URL | WhatsApp-friendly read-only report without parent accounts | Anyone with the URL can view until revoke/expiry |
+| CSV on the API; PDF via browser print | Excel-friendly files without a PDF dependency | Print layout depends on the browser |
+| Filter the grid; paginate lists | Phone UI stays fast as history grows | List responses use `{ items, page, pageSize, total, totalPages }` |
+| PWA shell + local outbox for marks | Keep ticking during a classroom dead zone | Only status PUTs are queued |
+| Class teacher vs subject teacher RBAC | Roster and parent links stay with the class teacher | Register creates `TEACHER`; admin invite can set `CLASS_TEACHER` |
+| Coverage floor on `@classroom-tracker/shared` | Zod + status rules are the product contract | API/web stay integration-tested without a global % gate |
+| Split deploy (Vercel + Render + Neon) | Free tiers for a portfolio demo | Cross-origin cookies need SameSite=None; Render cold-starts |
 
 ## Prerequisites
 
@@ -181,25 +112,88 @@ npm run dev:api
 npm run dev:web
 ```
 
-- Web: http://localhost:5173  
-- API health: http://localhost:3001/health  
-- Login: `POST http://localhost:3001/auth/login`
+- Web: http://localhost:5173
+- API health: http://localhost:3001/health
+
+Open the web app → sign in → pick **8-B** → tick grid, students (report +
+parent link), or defaulters.
+
+**PWA:** production builds register a service worker. Install from the browser
+(“Add to Home Screen”). The tick grid caches the last successful load and
+queues marks while offline, then syncs on reconnect.
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
 | `npm run lint` / `typecheck` / `test` | Quality checks |
-| `npm run test:coverage` | Shared Zod/rules coverage (90% lines/functions/statements, 85% branches) |
-| `npm run test:e2e` | Playwright smoke (starts API + web; needs `DATABASE_URL` + JWT secrets) |
+| `npm run test:coverage` | Shared Zod/rules coverage (90% / 85% floors) |
+| `npm run test:e2e` | Playwright smoke (starts API + web; needs DB + JWT secrets) |
 | `npm run db:migrate` | Apply migrations |
-| `npm run db:seed` | Seed demo school/teacher/class/40 students |
+| `npm run db:seed` | Seed demo school / teacher / class / 40 students |
 
 First-time E2E browsers (once per machine):
 
 ```bash
 npx playwright install chromium
 ```
+
+## API surface
+
+### Auth
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/auth/register` | Creates a `TEACHER` (ignores any `role` in body) |
+| POST | `/auth/login` | Returns `{ accessToken, user }`, sets refresh cookie |
+| POST | `/auth/refresh` | Rotates tokens using httpOnly `refreshToken` cookie |
+| POST | `/auth/logout` | Revokes the refresh token and clears the cookie |
+| GET | `/auth/me` | Requires `Authorization: Bearer <accessToken>` |
+
+### Classes & students
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/schools` | Schools the caller belongs to (ADMIN: all) |
+| POST | `/schools` | ADMIN creates a school |
+| POST | `/schools/:schoolId/members` | ADMIN invites by email; optional `role`: `TEACHER` \| `CLASS_TEACHER` |
+| GET | `/classes` | Classes assigned to the teacher |
+| POST | `/classes` | Create a class in a school the teacher belongs to |
+| GET | `/classes/:classId/students` | Paginated students (`page`, `pageSize` default 40, optional `q`) |
+| POST | `/classes/:classId/students/import` | CSV import — **CLASS_TEACHER** or **ADMIN** only |
+
+CSV columns: `rollNumber`, `name`, optional `parentContact`. Max 200 rows per
+import. A roll that belongs to a student in a class you cannot access is a
+per-row error (no rename / enroll).
+
+### Tasks & tick grid
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/classes/:classId/tasks` | Create task + PENDING statuses (transaction) |
+| GET | `/classes/:classId/tasks` | Paginated tasks (`page`, `pageSize`, optional `type`) |
+| GET | `/tasks/:taskId` | Task detail with `statusCount` |
+| GET | `/classes/:classId/grid` | Students × tasks × statuses; filters `type`, `days`, `q` |
+| PUT | `/task-statuses/:statusId` | Body `{ status, version }` (+ optional marks/parts) |
+| POST | `/tasks/:taskId/mark-all-complete` | Only updates **PENDING** → DONE/CHECKED |
+
+Create types: `DAILY_HOMEWORK`, `NOTEBOOK_CHECK`, `WEEKLY_TEST` (requires
+`maxMarks`), `HOLIDAY_HOMEWORK` (requires `totalParts`).  
+`assignedOn` / `dueOn` are **Asia/Kolkata** calendar dates (`YYYY-MM-DD`).
+
+### Defaulters, reports, parents, export
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/classes/:classId/defaulters?days=7` | 2+ misses in last N Kolkata days (`days` 1–90) |
+| GET | `/classes/:classId/students/:studentId/report?days=30` | Per-student summary + rows |
+| GET/POST/DELETE | `/classes/:classId/students/:studentId/parent-link` | Class teacher / admin |
+| GET | `/parent/:token/report?days=30` | Public read-only report |
+| GET | `/parent/:token/report.csv?days=30` | Public CSV |
+| GET | `/classes/:classId/students/:studentId/report.csv?days=30` | Teacher CSV |
+| GET | `/classes/:classId/defaulters.csv?days=7` | Teacher CSV |
+
+PDF: **Print / PDF** in the web UI (browser print → Save as PDF).
 
 ## Out of scope
 
