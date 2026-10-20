@@ -44,7 +44,7 @@ Monorepo with npm workspaces: apps/web, apps/api, packages/shared (shared Zod sc
 - Frontend: React + TypeScript + Vite, React Router, TanStack Query, Tailwind CSS. Installable PWA in V3.
 - Backend: Node + TypeScript + Fastify, Zod validation on every request
 - Database: PostgreSQL with Prisma, migrations committed to git
-- Auth: email + password (argon2 or bcrypt), JWT access token + httpOnly refresh cookie
+- Auth: email + password (argon2 or bcrypt) + Indian mobile SMS OTP on sign-up (Twilio; `SMS_OTP_MODE=log` for local/CI), JWT access token + httpOnly refresh cookie
 - Testing: Vitest for unit/integration, Supertest for API, Playwright for one end-to-end flow
 - Tooling: ESLint, Prettier, strict TypeScript, GitHub Actions CI (lint, typecheck, test)
 - Deploy: Vercel (web), Render or Railway (API), Neon or Supabase (Postgres). Docker Compose for local dev.

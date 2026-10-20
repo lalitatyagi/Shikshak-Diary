@@ -20,14 +20,23 @@ export {
   type ClassManagerRole,
 } from "./rbac.js";
 export {
+  normalizeIndianPhone,
+  maskPhone,
+  phoneSchema,
   registerBodySchema,
+  verifyPhoneBodySchema,
+  resendPhoneOtpBodySchema,
   loginBodySchema,
   authUserSchema,
   authTokensSchema,
+  registerPendingSchema,
   type RegisterBody,
+  type VerifyPhoneBody,
+  type ResendPhoneOtpBody,
   type LoginBody,
   type AuthUser,
   type AuthTokens,
+  type RegisterPending,
 } from "./auth.js";
 export {
   createSchoolBodySchema,

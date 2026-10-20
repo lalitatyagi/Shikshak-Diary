@@ -9,6 +9,7 @@ import {
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
@@ -46,26 +47,18 @@ describe("defaulters routes", () => {
     emails.push(email, otherEmail);
 
     accessToken = (
-      await app.inject({
-        method: "POST",
-        url: "/auth/register",
-        payload: {
-          name: "Def Teacher",
-          email,
-          password: "Password123!",
-        },
+      await registerVerifiedTeacher(app, {
+        name: "Def Teacher",
+        email,
+        password: "Password123!",
       })
     ).json().accessToken as string;
 
     otherToken = (
-      await app.inject({
-        method: "POST",
-        url: "/auth/register",
-        payload: {
-          name: "Other Def",
-          email: otherEmail,
-          password: "Password123!",
-        },
+      await registerVerifiedTeacher(app, {
+        name: "Other Def",
+        email: otherEmail,
+        password: "Password123!",
       })
     ).json().accessToken as string;
 

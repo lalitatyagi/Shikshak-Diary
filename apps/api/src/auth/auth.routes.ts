@@ -3,15 +3,20 @@ import {
   authUserSchema,
   loginBodySchema,
   registerBodySchema,
+  registerPendingSchema,
+  resendPhoneOtpBodySchema,
+  verifyPhoneBodySchema,
 } from "@classroom-tracker/shared";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   AuthError,
   getUserById,
   loginUser,
-  registerUser,
+  resendPhoneRegistrationOtp,
   revokeRefreshToken,
   rotateRefreshSession,
+  startPhoneRegistration,
+  verifyPhoneRegistration,
 } from "./auth.service.js";
 import { requireAuth, requireRole, teacherRoles } from "./auth.middleware.js";
 import { REFRESH_COOKIE_NAME, refreshCookieOptions } from "./tokens.js";
@@ -57,7 +62,27 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
-      const session = await registerUser(parsed.data);
+      const pending = await startPhoneRegistration(parsed.data);
+      return reply.status(201).send(registerPendingSchema.parse(pending));
+    } catch (error) {
+      return sendAuthError(reply, error);
+    }
+  });
+
+  app.post("/auth/verify-phone", authWriteLimit(), async (request, reply) => {
+    const parsed = verifyPhoneBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: "Invalid verification payload",
+        details: parsed.error.flatten(),
+      });
+    }
+
+    try {
+      const session = await verifyPhoneRegistration(
+        parsed.data.registrationId,
+        parsed.data.code,
+      );
       setRefreshCookie(reply, session.refreshToken);
       return reply.status(201).send(
         authTokensSchema.parse({
@@ -65,6 +90,25 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           user: session.user,
         }),
       );
+    } catch (error) {
+      return sendAuthError(reply, error);
+    }
+  });
+
+  app.post("/auth/resend-otp", authWriteLimit(), async (request, reply) => {
+    const parsed = resendPhoneOtpBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: "Invalid resend payload",
+        details: parsed.error.flatten(),
+      });
+    }
+
+    try {
+      const pending = await resendPhoneRegistrationOtp(
+        parsed.data.registrationId,
+      );
+      return reply.send(registerPendingSchema.parse(pending));
     } catch (error) {
       return sendAuthError(reply, error);
     }

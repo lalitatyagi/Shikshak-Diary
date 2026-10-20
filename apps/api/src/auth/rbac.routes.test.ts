@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
@@ -38,26 +39,18 @@ describe("RBAC roster vs subject teacher", () => {
     emails.push(classTeacherEmail, subjectEmail);
 
     classTeacherToken = (
-      await app.inject({
-        method: "POST",
-        url: "/auth/register",
-        payload: {
-          name: "Class Teacher",
-          email: classTeacherEmail,
-          password: "Password123!",
-        },
+      await registerVerifiedTeacher(app, {
+        name: "Class Teacher",
+        email: classTeacherEmail,
+        password: "Password123!",
       })
     ).json().accessToken as string;
 
     subjectTeacherToken = (
-      await app.inject({
-        method: "POST",
-        url: "/auth/register",
-        payload: {
-          name: "Subject Teacher",
-          email: subjectEmail,
-          password: "Password123!",
-        },
+      await registerVerifiedTeacher(app, {
+        name: "Subject Teacher",
+        email: subjectEmail,
+        password: "Password123!",
       })
     ).json().accessToken as string;
 

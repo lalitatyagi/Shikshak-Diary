@@ -2,12 +2,22 @@ import { randomUUID } from "node:crypto";
 import { Prisma, type User } from "@prisma/client";
 import {
   authUserSchema,
+  maskPhone,
   type AuthUser,
   type LoginBody,
   type RegisterBody,
+  type RegisterPending,
 } from "@classroom-tracker/shared";
 import { prisma } from "../db.js";
 import { hashPassword, verifyPassword } from "./password.js";
+import {
+  generateOtpCode,
+  hashOtpCode,
+  otpCodesMatch,
+  otpMaxAttempts,
+  otpTtlMs,
+} from "./otp.js";
+import { sendOtpSms, smsOtpMode } from "./sms.js";
 
 /** Precomputed bcrypt hash so unknown emails take the same time as real ones. */
 const DUMMY_PASSWORD_HASH =
@@ -20,6 +30,8 @@ import {
   signRefreshToken,
   verifyRefreshToken,
 } from "./tokens.js";
+
+const REGISTER_PURPOSE = "REGISTER";
 
 export class AuthError extends Error {
   constructor(
@@ -37,24 +49,160 @@ function toAuthUser(user: User): AuthUser {
     name: user.name,
     email: user.email,
     role: user.role,
+    phone: user.phone,
   });
 }
 
-export async function registerUser(input: RegisterBody): Promise<{
+/**
+ * Starts sign-up: stores a pending PhoneOtp and sends SMS.
+ * Does not create a User or session until verifyPhoneRegistration succeeds.
+ */
+export async function startPhoneRegistration(
+  input: RegisterBody,
+): Promise<RegisterPending> {
+  const email = input.email.toLowerCase();
+  const phone = input.phone;
+
+  const existingEmail = await prisma.user.findUnique({ where: { email } });
+  if (existingEmail) {
+    throw new AuthError("Unable to register", 400);
+  }
+
+  const existingPhone = await prisma.user.findUnique({ where: { phone } });
+  if (existingPhone) {
+    throw new AuthError("Unable to register", 400);
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  const code = generateOtpCode();
+  const codeHash = hashOtpCode(code);
+
+  await prisma.phoneOtp.deleteMany({
+    where: {
+      OR: [{ pendingEmail: email }, { phone, purpose: REGISTER_PURPOSE }],
+    },
+  });
+
+  const row = await prisma.phoneOtp.create({
+    data: {
+      phone,
+      purpose: REGISTER_PURPOSE,
+      codeHash,
+      expiresAt: new Date(Date.now() + otpTtlMs()),
+      pendingName: input.name,
+      pendingEmail: email,
+      pendingPasswordHash: passwordHash,
+    },
+  });
+
+  try {
+    await sendOtpSms(phone, code);
+  } catch (error) {
+    await prisma.phoneOtp.delete({ where: { id: row.id } }).catch(() => {});
+    throw new AuthError(
+      error instanceof Error ? error.message : "Failed to send OTP",
+      502,
+    );
+  }
+
+  const pending: RegisterPending = {
+    status: "otp_sent",
+    registrationId: row.id,
+    phone: maskPhone(phone),
+  };
+  if (smsOtpMode() === "log") {
+    pending.devCode = code;
+  }
+  return pending;
+}
+
+export async function resendPhoneRegistrationOtp(
+  registrationId: string,
+): Promise<RegisterPending> {
+  const row = await prisma.phoneOtp.findUnique({
+    where: { id: registrationId },
+  });
+  if (!row || row.purpose !== REGISTER_PURPOSE) {
+    throw new AuthError("Registration not found or expired", 404);
+  }
+
+  const code = generateOtpCode();
+  const updated = await prisma.phoneOtp.update({
+    where: { id: row.id },
+    data: {
+      codeHash: hashOtpCode(code),
+      expiresAt: new Date(Date.now() + otpTtlMs()),
+      attempts: 0,
+    },
+  });
+
+  try {
+    await sendOtpSms(updated.phone, code);
+  } catch (error) {
+    throw new AuthError(
+      error instanceof Error ? error.message : "Failed to send OTP",
+      502,
+    );
+  }
+
+  const pending: RegisterPending = {
+    status: "otp_sent",
+    registrationId: updated.id,
+    phone: maskPhone(updated.phone),
+  };
+  if (smsOtpMode() === "log") {
+    pending.devCode = code;
+  }
+  return pending;
+}
+
+export async function verifyPhoneRegistration(
+  registrationId: string,
+  code: string,
+): Promise<{
   user: AuthUser;
   accessToken: string;
   refreshToken: string;
 }> {
-  const passwordHash = await hashPassword(input.password);
+  const row = await prisma.phoneOtp.findUnique({
+    where: { id: registrationId },
+  });
+  if (!row || row.purpose !== REGISTER_PURPOSE) {
+    throw new AuthError("Registration not found or expired", 404);
+  }
+
+  if (row.expiresAt.getTime() <= Date.now()) {
+    await prisma.phoneOtp.delete({ where: { id: row.id } }).catch(() => {});
+    throw new AuthError("OTP expired. Request a new code.", 400);
+  }
+
+  if (row.attempts >= otpMaxAttempts()) {
+    await prisma.phoneOtp.delete({ where: { id: row.id } }).catch(() => {});
+    throw new AuthError("Too many attempts. Start sign-up again.", 400);
+  }
+
+  if (!otpCodesMatch(row.codeHash, code)) {
+    await prisma.phoneOtp.update({
+      where: { id: row.id },
+      data: { attempts: { increment: 1 } },
+    });
+    throw new AuthError("Invalid code", 400);
+  }
 
   try {
-    const user = await prisma.user.create({
-      data: {
-        name: input.name,
-        email: input.email.toLowerCase(),
-        passwordHash,
-        role: "TEACHER",
-      },
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          name: row.pendingName,
+          email: row.pendingEmail,
+          passwordHash: row.pendingPasswordHash,
+          role: "TEACHER",
+          phone: row.phone,
+          phoneVerifiedAt: new Date(),
+        },
+      });
+      await tx.phoneOtp.delete({ where: { id: row.id } });
+      return created;
     });
 
     return issueSession(user);

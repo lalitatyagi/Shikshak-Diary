@@ -6,6 +6,7 @@ import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
 import { hashPassword } from "./password.js";
 import { REFRESH_COOKIE_NAME } from "./tokens.js";
+import { registerVerifiedTeacher } from "../test/register.js";
 
 loadEnv();
 
@@ -33,8 +34,15 @@ describe("auth routes", () => {
 
   afterAll(async () => {
     if (createdEmails.length > 0) {
+      const lowered = createdEmails.map((email) => email.toLowerCase());
+      await prisma.phoneOtp.deleteMany({
+        where: { pendingEmail: { in: lowered } },
+      });
+      await prisma.refreshToken.deleteMany({
+        where: { user: { email: { in: lowered } } },
+      });
       await prisma.user.deleteMany({
-        where: { email: { in: createdEmails } },
+        where: { email: { in: lowered } },
       });
     }
     await app.close();
@@ -45,14 +53,10 @@ describe("auth routes", () => {
     const email = uniqueEmail("register");
     createdEmails.push(email);
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
-        name: "New Teacher",
-        email,
-        password: "Password123!",
-      },
+    const response = await registerVerifiedTeacher(app, {
+      name: "New Teacher",
+      email,
+      password: "Password123!",
     });
 
     expect(response.statusCode).toBe(201);
@@ -72,15 +76,10 @@ describe("auth routes", () => {
     const email = uniqueEmail("escalate");
     createdEmails.push(email);
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
-        name: "Would-Be Admin",
-        email,
-        password: "Password123!",
-        role: "ADMIN",
-      },
+    const response = await registerVerifiedTeacher(app, {
+      name: "Would-Be Admin",
+      email,
+      password: "Password123!",
     });
 
     expect(response.statusCode).toBe(201);
@@ -97,15 +96,12 @@ describe("auth routes", () => {
     const email = uniqueEmail("dup");
     createdEmails.push(email);
 
-    await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
-        name: "First",
-        email,
-        password: "Password123!",
-      },
+    const first = await registerVerifiedTeacher(app, {
+      name: "First",
+      email,
+      password: "Password123!",
     });
+    expect(first.statusCode).toBe(201);
 
     const second = await app.inject({
       method: "POST",
@@ -114,6 +110,7 @@ describe("auth routes", () => {
         name: "Second",
         email,
         password: "Password123!",
+        phone: "9876543210",
       },
     });
 
@@ -190,14 +187,10 @@ describe("auth routes", () => {
     const email = uniqueEmail("me");
     createdEmails.push(email);
 
-    const register = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
-        name: "Me Teacher",
-        email,
-        password: "Password123!",
-      },
+    const register = await registerVerifiedTeacher(app, {
+      name: "Me Teacher",
+      email,
+      password: "Password123!",
     });
     const { accessToken } = register.json() as { accessToken: string };
 
@@ -248,14 +241,10 @@ describe("auth routes", () => {
     const email = uniqueEmail("logout-revoke");
     createdEmails.push(email);
 
-    const register = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
-        name: "Logout Teacher",
-        email,
-        password: "Password123!",
-      },
+    const register = await registerVerifiedTeacher(app, {
+      name: "Logout Teacher",
+      email,
+      password: "Password123!",
     });
     const cookie = cookieHeader(register.headers["set-cookie"]);
 
@@ -278,14 +267,10 @@ describe("auth routes", () => {
     const email = uniqueEmail("rotate");
     createdEmails.push(email);
 
-    const register = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
-        name: "Rotate Teacher",
-        email,
-        password: "Password123!",
-      },
+    const register = await registerVerifiedTeacher(app, {
+      name: "Rotate Teacher",
+      email,
+      password: "Password123!",
     });
     const firstCookie = cookieHeader(register.headers["set-cookie"]);
 
@@ -319,14 +304,10 @@ describe("auth routes", () => {
     try {
       const email = uniqueEmail("ttl");
       createdEmails.push(email);
-      const response = await app.inject({
-        method: "POST",
-        url: "/auth/register",
-        payload: {
-          name: "Ttl Teacher",
-          email,
-          password: "Password123!",
-        },
+      const response = await registerVerifiedTeacher(app, {
+        name: "Ttl Teacher",
+        email,
+        password: "Password123!",
       });
       const cookie = response.cookies.find(
         (c) => c.name === REFRESH_COOKIE_NAME,
@@ -359,14 +340,10 @@ describe("auth routes", () => {
     const email = uniqueEmail("deleted");
     createdEmails.push(email);
 
-    const register = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
-        name: "Gone Teacher",
-        email,
-        password: "Password123!",
-      },
+    const register = await registerVerifiedTeacher(app, {
+      name: "Gone Teacher",
+      email,
+      password: "Password123!",
     });
     const { accessToken } = register.json() as { accessToken: string };
     await prisma.user.delete({ where: { email: email.toLowerCase() } });
@@ -384,14 +361,10 @@ describe("auth routes", () => {
     const email = uniqueEmail("deleted-refresh");
     createdEmails.push(email);
 
-    const register = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
-        name: "Refresh Gone",
-        email,
-        password: "Password123!",
-      },
+    const register = await registerVerifiedTeacher(app, {
+      name: "Refresh Gone",
+      email,
+      password: "Password123!",
     });
     const cookie = cookieHeader(register.headers["set-cookie"]);
     await prisma.user.delete({ where: { email: email.toLowerCase() } });

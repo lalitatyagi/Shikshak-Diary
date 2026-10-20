@@ -9,7 +9,9 @@ import {
 import {
   authTokensSchema,
   authUserSchema,
+  registerPendingSchema,
   type AuthUser,
+  type RegisterPending,
 } from "@classroom-tracker/shared";
 import {
   apiFetch,
@@ -23,6 +25,14 @@ type AuthContextValue = {
   ready: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
+  /** Starts sign-up and sends SMS OTP. Does not create a session. */
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    phone: string,
+  ) => Promise<RegisterPending>;
+  completeRegistration: (registrationId: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -75,6 +85,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await apiFetch<unknown>("/auth/login", {
             method: "POST",
             body: JSON.stringify({ email, password }),
+          }),
+        );
+        setAccessToken(result.accessToken);
+        setUser(result.user);
+      },
+      async register(
+        name: string,
+        email: string,
+        password: string,
+        phone: string,
+      ) {
+        return registerPendingSchema.parse(
+          await apiFetch<unknown>("/auth/register", {
+            method: "POST",
+            body: JSON.stringify({ name, email, password, phone }),
+          }),
+        );
+      },
+      async completeRegistration(registrationId: string, code: string) {
+        const result = authTokensSchema.parse(
+          await apiFetch<unknown>("/auth/verify-phone", {
+            method: "POST",
+            body: JSON.stringify({ registrationId, code }),
           }),
         );
         setAccessToken(result.accessToken);

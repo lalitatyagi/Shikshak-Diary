@@ -42,6 +42,7 @@ npm run db:seed
 3. Set Blueprint secrets (`sync: false`):
    - `DATABASE_URL` — Neon connection string (same as local `apps/api/.env`, or pooled URL)
    - `CORS_ORIGINS` — temporarily `http://localhost:5173` **or** your expected Vercel URL, e.g. `https://shikshak-diary.vercel.app`
+   - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` — required for sign-up SMS (`SMS_OTP_MODE=twilio` in Blueprint)
 4. Wait for deploy. Health: `https://classroom-tracker-api.onrender.com/health`  
    (name comes from `render.yaml`; adjust if Render renames it.)
 5. Free tier spins down after idle; first request can take ~30–60s.

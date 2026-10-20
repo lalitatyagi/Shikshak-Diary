@@ -72,6 +72,11 @@ export function LoginPage() {
         </button>
       </form>
       <p className="mt-4 text-center text-sm text-[var(--muted)]">
+        No account?{" "}
+        <Link to="/register" className="underline text-[var(--accent)]">
+          Sign up
+        </Link>
+        {" · "}
         <Link to="/health" className="underline">
           API health
         </Link>

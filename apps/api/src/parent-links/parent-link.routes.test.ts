@@ -4,6 +4,7 @@ import { toKolkataCalendarDate } from "@classroom-tracker/shared";
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
@@ -39,26 +40,18 @@ describe("parent link routes", () => {
     emails.push(email, otherEmail);
 
     accessToken = (
-      await app.inject({
-        method: "POST",
-        url: "/auth/register",
-        payload: {
-          name: "Link Teacher",
-          email,
-          password: "Password123!",
-        },
+      await registerVerifiedTeacher(app, {
+        name: "Link Teacher",
+        email,
+        password: "Password123!",
       })
     ).json().accessToken as string;
 
     otherToken = (
-      await app.inject({
-        method: "POST",
-        url: "/auth/register",
-        payload: {
-          name: "Other Link",
-          email: otherEmail,
-          password: "Password123!",
-        },
+      await registerVerifiedTeacher(app, {
+        name: "Other Link",
+        email: otherEmail,
+        password: "Password123!",
       })
     ).json().accessToken as string;
 

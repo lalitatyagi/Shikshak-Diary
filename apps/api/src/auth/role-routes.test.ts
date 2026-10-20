@@ -5,6 +5,7 @@ import { toKolkataCalendarDate } from "@classroom-tracker/shared";
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { registerVerifiedTeacher } from "../test/register.js";
 import { hashPassword } from "./password.js";
 import {
   deleteUsersByEmail,
@@ -68,14 +69,10 @@ describe("role checks on class, task, and status routes", () => {
     expect(createdSchool.statusCode).toBe(201);
     schoolId = (createdSchool.json() as { id: string }).id;
 
-    const teacher = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
-        name: "Role Teacher",
-        email: teacherEmail,
-        password: "Password123!",
-      },
+    const teacher = await registerVerifiedTeacher(app, {
+      name: "Role Teacher",
+      email: teacherEmail,
+      password: "Password123!",
     });
     const teacherToken = (teacher.json() as { accessToken: string })
       .accessToken;

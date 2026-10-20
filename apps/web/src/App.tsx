@@ -1,7 +1,10 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { VerifyPhonePage } from "./pages/VerifyPhonePage";
 import { ClassesPage } from "./pages/ClassesPage";
+
 import { TickGridPage } from "./pages/TickGridPage";
 import { DefaultersPage } from "./pages/DefaultersPage";
 import { StudentsPage } from "./pages/StudentsPage";
@@ -32,6 +35,8 @@ export function App() {
       <OfflineBanner />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify-phone" element={<VerifyPhonePage />} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="/p/:token" element={<ParentReportPage />} />
         <Route

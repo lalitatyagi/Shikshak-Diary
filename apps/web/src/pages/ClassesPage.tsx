@@ -1,19 +1,84 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { classSchema, type ClassDto } from "@classroom-tracker/shared";
+import {
+  classSchema,
+  schoolSchema,
+  type ClassDto,
+  type SchoolDto,
+} from "@classroom-tracker/shared";
 import { z } from "zod";
-import { apiFetch } from "../api";
+import { ApiError, apiFetch } from "../api";
 import { useAuth } from "../auth";
 
 const classesSchema = z.array(classSchema);
+const schoolsSchema = z.array(schoolSchema);
 
 export function ClassesPage() {
   const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [schoolId, setSchoolId] = useState("");
+  const [name, setName] = useState("");
+  const [academicYear, setAcademicYear] = useState("2025-26");
+  const [subjectName, setSubjectName] = useState("General");
+  const [formError, setFormError] = useState<string | null>(null);
+
   const classesQuery = useQuery({
     queryKey: ["classes"],
     queryFn: async () =>
       classesSchema.parse(await apiFetch<unknown>("/classes")),
   });
+
+  const schoolsQuery = useQuery({
+    queryKey: ["schools"],
+    queryFn: async () =>
+      schoolsSchema.parse(await apiFetch<unknown>("/schools")),
+  });
+
+  const schools = schoolsQuery.data ?? [];
+
+  useEffect(() => {
+    if (schools.length === 1 && !schoolId) {
+      setSchoolId(schools[0]!.id);
+    }
+  }, [schools, schoolId]);
+
+  const createClass = useMutation({
+    mutationFn: async () => {
+      const created = await apiFetch<unknown>("/classes", {
+        method: "POST",
+        body: JSON.stringify({
+          schoolId,
+          name: name.trim(),
+          academicYear: academicYear.trim(),
+          subjectName: subjectName.trim() || "General",
+        }),
+      });
+      return classSchema.parse(created);
+    },
+    onSuccess: async () => {
+      setName("");
+      setFormError(null);
+      setShowForm(false);
+      await queryClient.invalidateQueries({ queryKey: ["classes"] });
+    },
+    onError: (err) => {
+      setFormError(
+        err instanceof ApiError ? err.message : "Could not create class",
+      );
+    },
+  });
+
+  function onCreateSubmit(event: FormEvent) {
+    event.preventDefault();
+    setFormError(null);
+    if (!schoolId) {
+      setFormError("Pick a school first.");
+      return;
+    }
+    createClass.mutate();
+  }
 
   return (
     <main className="mx-auto min-h-screen max-w-lg px-4 py-6">
@@ -81,10 +146,107 @@ export function ClassesPage() {
         ))}
       </ul>
 
-      {classesQuery.data?.length === 0 && (
+      {!classesQuery.isPending && classesQuery.data?.length === 0 && (
         <p className="mt-8 text-[var(--muted)]">
-          No classes yet. Create one via the API, then refresh.
+          {schools.length === 0
+            ? "No classes yet. Ask an admin to invite you to a school, then create a class here."
+            : "No classes yet. Create one below."}
         </p>
+      )}
+
+      {schoolsQuery.isSuccess && schools.length > 0 && (
+        <div className="mt-8">
+          {!showForm ? (
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="min-h-12 w-full rounded-lg border border-[var(--accent)] text-base font-medium text-[var(--accent)]"
+            >
+              + New class
+            </button>
+          ) : (
+            <form
+              onSubmit={onCreateSubmit}
+              className="space-y-3 rounded-xl bg-[var(--surface)] p-4 shadow-sm"
+            >
+              <h2 className="text-lg font-medium text-[var(--accent)]">
+                New class
+              </h2>
+              {schools.length > 1 ? (
+                <label className="block text-sm">
+                  <span className="text-[var(--muted)]">School</span>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3 text-base"
+                    value={schoolId}
+                    onChange={(e) => setSchoolId(e.target.value)}
+                    required
+                  >
+                    <option value="">Select school</option>
+                    {schools.map((school: SchoolDto) => (
+                      <option key={school.id} value={school.id}>
+                        {school.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <p className="text-sm text-[var(--muted)]">
+                  School: {schools[0]?.name}
+                </p>
+              )}
+              <label className="block text-sm">
+                <span className="text-[var(--muted)]">Class name</span>
+                <input
+                  className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3 text-base"
+                  placeholder="e.g. 9-A"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  maxLength={50}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-[var(--muted)]">Academic year</span>
+                <input
+                  className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3 text-base"
+                  value={academicYear}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                  required
+                  maxLength={20}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-[var(--muted)]">Subject</span>
+                <input
+                  className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3 text-base"
+                  value={subjectName}
+                  onChange={(e) => setSubjectName(e.target.value)}
+                  maxLength={100}
+                />
+              </label>
+              {formError && <p className="text-sm text-red-700">{formError}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={createClass.isPending}
+                  className="min-h-12 flex-1 rounded-lg bg-[var(--accent)] text-base font-medium text-white disabled:opacity-60"
+                >
+                  {createClass.isPending ? "Creating…" : "Create class"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(false);
+                    setFormError(null);
+                  }}
+                  className="min-h-12 rounded-lg px-4 text-sm text-[var(--muted)] underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       )}
     </main>
   );

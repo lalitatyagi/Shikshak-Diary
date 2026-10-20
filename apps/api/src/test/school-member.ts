@@ -28,13 +28,15 @@ export async function deleteUsersByEmail(emails: string[]): Promise<void> {
     select: { id: true },
   });
   const ids = users.map((user) => user.id);
+  const lowered = emails.map((email) => email.toLowerCase());
   if (ids.length > 0) {
     await prisma.auditLog.deleteMany({ where: { userId: { in: ids } } });
     await prisma.refreshToken.deleteMany({ where: { userId: { in: ids } } });
     await prisma.parentLink.deleteMany({ where: { createdById: { in: ids } } });
   }
+  await prisma.phoneOtp.deleteMany({ where: { pendingEmail: { in: lowered } } });
   await prisma.user.deleteMany({
-    where: { email: { in: emails.map((email) => email.toLowerCase()) } },
+    where: { email: { in: lowered } },
   });
 }
 

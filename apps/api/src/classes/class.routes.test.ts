@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
@@ -36,26 +37,18 @@ describe("class routes", () => {
     const otherEmail = uniqueEmail("other-teacher");
     emails.push(teacherEmail, otherEmail);
 
-    const teacherRes = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
+    const teacherRes = await registerVerifiedTeacher(app, {
         name: "Class Teacher",
         email: teacherEmail,
         password: "Password123!",
-      },
-    });
+      });
     accessToken = (teacherRes.json() as { accessToken: string }).accessToken;
 
-    const otherRes = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
+    const otherRes = await registerVerifiedTeacher(app, {
         name: "Other Teacher",
         email: otherEmail,
         password: "Password123!",
-      },
-    });
+      });
     otherToken = (otherRes.json() as { accessToken: string }).accessToken;
 
     await grantClassTeacherMembership(teacherEmail, schoolId);
@@ -271,15 +264,11 @@ describe("class routes", () => {
 
     const attackerEmail = uniqueEmail("invited-attacker");
     emails.push(attackerEmail);
-    const attackerRegister = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
+    const attackerRegister = await registerVerifiedTeacher(app, {
         name: "Invited Attacker",
         email: attackerEmail,
         password: "Password123!",
-      },
-    });
+      });
     const attackerToken = (attackerRegister.json() as { accessToken: string })
       .accessToken;
     await grantClassTeacherMembership(attackerEmail, schoolId);
@@ -391,15 +380,11 @@ describe("class routes", () => {
   it("does not 500 when two classes import the same new roll at once", async () => {
     const otherEmail = uniqueEmail("race-teacher");
     emails.push(otherEmail);
-    const registered = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
+    const registered = await registerVerifiedTeacher(app, {
         name: "Race Teacher",
         email: otherEmail,
         password: "Password123!",
-      },
-    });
+      });
     const otherAccess = (registered.json() as { accessToken: string })
       .accessToken;
     await grantClassTeacherMembership(otherEmail, schoolId);

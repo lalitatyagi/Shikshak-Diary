@@ -32,12 +32,15 @@ enum StatusValue {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role
-  createdAt    DateTime @default(now())
+  id              String    @id @default(cuid())
+  name            String
+  email           String    @unique
+  passwordHash    String
+  role            Role
+  /// E.164, e.g. +919876543210. Optional for seeded/legacy accounts.
+  phone           String?   @unique
+  phoneVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
 
   createdTasks       Task[]                @relation("TaskCreatedBy")
   updatedStatuses    TaskStatus[]          @relation("StatusUpdatedBy")
@@ -46,6 +49,23 @@ model User {
   refreshTokens      RefreshToken[]
   auditLogs          AuditLog[]
   parentLinks        ParentLink[]
+}
+
+/// Pending phone OTP (sign-up). User row is created only after a successful verify.
+model PhoneOtp {
+  id                  String   @id @default(cuid())
+  phone               String
+  purpose             String
+  codeHash            String
+  expiresAt           DateTime
+  attempts            Int      @default(0)
+  pendingName         String
+  pendingEmail        String
+  pendingPasswordHash String
+  createdAt           DateTime @default(now())
+
+  @@index([phone, purpose])
+  @@index([pendingEmail])
 }
 
 model School {

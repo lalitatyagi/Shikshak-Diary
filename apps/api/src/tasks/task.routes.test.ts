@@ -8,6 +8,7 @@ import {
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
@@ -41,26 +42,18 @@ describe("task routes", () => {
     const otherEmail = uniqueEmail("other-task-teacher");
     emails.push(email, otherEmail);
 
-    const register = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
+    const register = await registerVerifiedTeacher(app, {
         name: "Task Teacher",
         email,
         password: "Password123!",
-      },
-    });
+      });
     accessToken = (register.json() as { accessToken: string }).accessToken;
 
-    const otherRegister = await app.inject({
-      method: "POST",
-      url: "/auth/register",
-      payload: {
+    const otherRegister = await registerVerifiedTeacher(app, {
         name: "Other Task Teacher",
         email: otherEmail,
         password: "Password123!",
-      },
-    });
+      });
     otherToken = (otherRegister.json() as { accessToken: string }).accessToken;
 
     await grantClassTeacherMembership(email, schoolId);

@@ -31,7 +31,8 @@
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "jose": "^6.2.12",
-    "prisma": "^6.5.0"
+    "prisma": "^6.5.0",
+    "twilio": "^6.2.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

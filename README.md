@@ -41,6 +41,8 @@ Phone-width captures from the seeded demo class **8-B** (40 students).
 
 ## What it does
 
+- **Sign in / Sign up** — email + password + Indian mobile; SMS OTP (Twilio) before the account is created; school access still needs an admin invite
+- **Classes** — list + **New class** for schools you belong to (demo seed has one school)
 - **Tick grid** — students × tasks; tap to cycle status; bulk “mark all done”
 - **Task types** — daily homework, notebook check, weekly test (marks), holiday homework (parts)
 - **Defaulters** — students with 2+ `NOT_DONE` / `NOT_CHECKED` in the last N Kolkata days
@@ -146,7 +148,9 @@ npx playwright install chromium
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| POST | `/auth/register` | Creates a `TEACHER` (ignores any `role` in body) |
+| POST | `/auth/register` | Starts sign-up (`name`, `email`, `password`, `phone`) → SMS OTP; returns `{ status: "otp_sent", registrationId, phone }` |
+| POST | `/auth/verify-phone` | Body `{ registrationId, code }` — creates `TEACHER` + session |
+| POST | `/auth/resend-otp` | Resends SMS for a pending registration |
 | POST | `/auth/login` | Returns `{ accessToken, user }`, sets refresh cookie |
 | POST | `/auth/refresh` | Rotates tokens using httpOnly `refreshToken` cookie |
 | POST | `/auth/logout` | Revokes the refresh token and clears the cookie |
