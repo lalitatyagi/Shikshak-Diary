@@ -34,7 +34,9 @@ export async function deleteUsersByEmail(emails: string[]): Promise<void> {
     await prisma.refreshToken.deleteMany({ where: { userId: { in: ids } } });
     await prisma.parentLink.deleteMany({ where: { createdById: { in: ids } } });
   }
-  await prisma.phoneOtp.deleteMany({ where: { pendingEmail: { in: lowered } } });
+  await prisma.phoneOtp.deleteMany({
+    where: { pendingEmail: { in: lowered } },
+  });
   await prisma.user.deleteMany({
     where: { email: { in: lowered } },
   });

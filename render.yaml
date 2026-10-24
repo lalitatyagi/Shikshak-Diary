@@ -30,8 +30,12 @@ services:
         value: none
       - key: COOKIE_SECURE
         value: "true"
+      # Portfolio demo: OTP + password-reset links log to Render logs (and
+      # API responses include dev codes). Switch to twilio + real creds later.
       - key: SMS_OTP_MODE
-        value: twilio
+        value: log
+      - key: EMAIL_RESET_MODE
+        value: log
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN

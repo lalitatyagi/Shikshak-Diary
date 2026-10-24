@@ -64,6 +64,24 @@ export const loginBodySchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+export const forgotPasswordBodySchema = z.object({
+  email: z.string().trim().email().max(255),
+});
+
+export const resetPasswordBodySchema = z.object({
+  token: z.string().trim().min(20).max(200),
+  password: z.string().min(8).max(128),
+});
+
+/** Always returned; token fields only when EMAIL_RESET_MODE=log. */
+export const forgotPasswordResponseSchema = z.object({
+  status: z.literal("ok"),
+  /** Present only in log/demo mode when the email matched a user. */
+  devResetToken: z.string().min(1).optional(),
+  /** Absolute path like /reset-password?token=… for the demo UI. */
+  devResetPath: z.string().min(1).optional(),
+});
+
 export const authUserSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -92,6 +110,11 @@ export type RegisterBody = z.infer<typeof registerBodySchema>;
 export type VerifyPhoneBody = z.infer<typeof verifyPhoneBodySchema>;
 export type ResendPhoneOtpBody = z.infer<typeof resendPhoneOtpBodySchema>;
 export type LoginBody = z.infer<typeof loginBodySchema>;
+export type ForgotPasswordBody = z.infer<typeof forgotPasswordBodySchema>;
+export type ResetPasswordBody = z.infer<typeof resetPasswordBodySchema>;
+export type ForgotPasswordResponse = z.infer<
+  typeof forgotPasswordResponseSchema
+>;
 export type AuthUser = z.infer<typeof authUserSchema>;
 export type AuthTokens = z.infer<typeof authTokensSchema>;
 export type RegisterPending = z.infer<typeof registerPendingSchema>;

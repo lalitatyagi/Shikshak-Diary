@@ -46,9 +46,10 @@ model User {
   updatedStatuses    TaskStatus[]          @relation("StatusUpdatedBy")
   teacherAssignments TeacherClassSubject[]
   schoolMemberships  SchoolMember[]
-  refreshTokens      RefreshToken[]
-  auditLogs          AuditLog[]
-  parentLinks        ParentLink[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]
+  parentLinks         ParentLink[]
 }
 
 /// Pending phone OTP (sign-up). User row is created only after a successful verify.
@@ -233,6 +234,20 @@ model RefreshToken {
   tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// One-time password reset. Raw token is emailed/logged; only the hash is stored.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

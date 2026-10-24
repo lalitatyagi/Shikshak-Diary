@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  forgotPasswordBodySchema,
+  forgotPasswordResponseSchema,
   loginBodySchema,
   normalizeIndianPhone,
   registerBodySchema,
+  resetPasswordBodySchema,
   authUserSchema,
   verifyPhoneBodySchema,
 } from "./auth.js";
@@ -78,5 +81,46 @@ describe("authUserSchema", () => {
       phone: null,
     });
     expect(parsed).not.toHaveProperty("passwordHash");
+  });
+});
+
+describe("forgotPasswordBodySchema", () => {
+  it("accepts a valid email", () => {
+    expect(
+      forgotPasswordBodySchema.safeParse({ email: "teacher@demo.local" })
+        .success,
+    ).toBe(true);
+  });
+});
+
+describe("resetPasswordBodySchema", () => {
+  it("requires a long token and strong password", () => {
+    expect(
+      resetPasswordBodySchema.safeParse({
+        token: "short",
+        password: "Password123!",
+      }).success,
+    ).toBe(false);
+    expect(
+      resetPasswordBodySchema.safeParse({
+        token: "a".repeat(32),
+        password: "Password123!",
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("forgotPasswordResponseSchema", () => {
+  it("allows optional demo token fields", () => {
+    expect(forgotPasswordResponseSchema.parse({ status: "ok" })).toEqual({
+      status: "ok",
+    });
+    expect(
+      forgotPasswordResponseSchema.parse({
+        status: "ok",
+        devResetToken: "tok",
+        devResetPath: "/reset-password?token=tok",
+      }).devResetPath,
+    ).toBe("/reset-password?token=tok");
   });
 });

@@ -46,6 +46,8 @@ function isAuthEntryPath(path: string): boolean {
   return (
     path === "/auth/login" ||
     path === "/auth/register" ||
+    path === "/auth/forgot-password" ||
+    path === "/auth/reset-password" ||
     path === "/auth/refresh"
   );
 }

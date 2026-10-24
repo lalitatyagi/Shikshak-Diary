@@ -43,6 +43,7 @@ Phone-width captures from the seeded demo class **8-B** (40 students).
 
 - **Sign in / Sign up** — email + password + Indian mobile; SMS OTP (Twilio) before the account is created; school access still needs an admin invite
 - **Classes** — list + **New class** for schools you belong to (demo seed has one school)
+- **CSV roster import** — class teachers import students from a file or paste (per-row errors)
 - **Tick grid** — students × tasks; tap to cycle status; bulk “mark all done”
 - **Task types** — daily homework, notebook check, weekly test (marks), holiday homework (parts)
 - **Defaulters** — students with 2+ `NOT_DONE` / `NOT_CHECKED` in the last N Kolkata days

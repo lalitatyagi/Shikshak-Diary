@@ -126,9 +126,35 @@ describe("parseStudentCsv", () => {
     expect(result.errors[0]?.message).toMatch(/positive integer/i);
   });
 
-  it("requires rollNumber and name headers", () => {
+  it("requires rollNumber and name headers when a header row is present", () => {
     const result = parseStudentCsv("id,fullname\n1,A\n");
     expect(result.rows).toEqual([]);
     expect(result.errors[0]?.message).toMatch(/rollNumber/i);
+  });
+
+  it("accepts headerless paste: roll, name, phone", () => {
+    const result = parseStudentCsv("1, Anushka, 958647826\n");
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toEqual([
+      {
+        row: 1,
+        rollNumber: 1,
+        name: "Anushka",
+        parentContact: "958647826",
+      },
+    ]);
+  });
+
+  it("accepts roll / phone header aliases", () => {
+    const result = parseStudentCsv("roll,name,phone\n2,Priya,9800000001\n");
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toEqual([
+      {
+        row: 2,
+        rollNumber: 2,
+        name: "Priya",
+        parentContact: "9800000001",
+      },
+    ]);
   });
 });

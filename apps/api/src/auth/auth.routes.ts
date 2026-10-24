@@ -1,10 +1,13 @@
 import {
   authTokensSchema,
   authUserSchema,
+  forgotPasswordBodySchema,
+  forgotPasswordResponseSchema,
   loginBodySchema,
   registerBodySchema,
   registerPendingSchema,
   resendPhoneOtpBodySchema,
+  resetPasswordBodySchema,
   verifyPhoneBodySchema,
 } from "@classroom-tracker/shared";
 import type { FastifyInstance, FastifyReply } from "fastify";
@@ -12,7 +15,9 @@ import {
   AuthError,
   getUserById,
   loginUser,
+  requestPasswordReset,
   resendPhoneRegistrationOtp,
+  resetPasswordWithToken,
   revokeRefreshToken,
   rotateRefreshSession,
   startPhoneRegistration,
@@ -132,6 +137,44 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           user: session.user,
         }),
       );
+    } catch (error) {
+      return sendAuthError(reply, error);
+    }
+  });
+
+  app.post(
+    "/auth/forgot-password",
+    authWriteLimit(),
+    async (request, reply) => {
+      const parsed = forgotPasswordBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid forgot-password payload",
+          details: parsed.error.flatten(),
+        });
+      }
+
+      try {
+        const result = await requestPasswordReset(parsed.data.email);
+        return reply.send(forgotPasswordResponseSchema.parse(result));
+      } catch (error) {
+        return sendAuthError(reply, error);
+      }
+    },
+  );
+
+  app.post("/auth/reset-password", authWriteLimit(), async (request, reply) => {
+    const parsed = resetPasswordBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: "Invalid reset-password payload",
+        details: parsed.error.flatten(),
+      });
+    }
+
+    try {
+      await resetPasswordWithToken(parsed.data.token, parsed.data.password);
+      return reply.status(204).send();
     } catch (error) {
       return sendAuthError(reply, error);
     }

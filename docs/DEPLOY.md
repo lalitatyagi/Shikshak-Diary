@@ -40,9 +40,9 @@ npm run db:seed
 1. Open [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint**.
 2. Select repo `lalitatyagi/Shikshak-Diary` → apply `render.yaml`.
 3. Set Blueprint secrets (`sync: false`):
-   - `DATABASE_URL` — Neon connection string (same as local `apps/api/.env`, or pooled URL)
-   - `CORS_ORIGINS` — temporarily `http://localhost:5173` **or** your expected Vercel URL, e.g. `https://shikshak-diary.vercel.app`
-   - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` — required for sign-up SMS (`SMS_OTP_MODE=twilio` in Blueprint)
+   - `DATABASE_URL` — Neon **pooled** connection string (same as local `apps/api/.env`)
+   - `CORS_ORIGINS` — your Vercel origin once known, e.g. `https://shikshak-diary.vercel.app` (comma-separate previews if needed)
+   - Twilio vars are optional for the portfolio demo — Blueprint sets `SMS_OTP_MODE=log` and `EMAIL_RESET_MODE=log` so OTP/reset codes appear in Render logs
 4. Wait for deploy. Health: `https://classroom-tracker-api.onrender.com/health`  
    (name comes from `render.yaml`; adjust if Render renames it.)
 5. Free tier spins down after idle; first request can take ~30–60s.

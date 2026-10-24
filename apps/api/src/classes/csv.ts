@@ -16,10 +16,34 @@ export type CsvParseResult = {
   errors: CsvRowIssue[];
 };
 
-const REQUIRED_HEADERS = ["rollnumber", "name"] as const;
-
 /** A class is about 40 students. This cap keeps one import inside a single transaction. */
 export const MAX_STUDENT_CSV_ROWS = 200;
+
+const ROLL_ALIASES = new Set([
+  "rollnumber",
+  "roll",
+  "rollno",
+  "rollnum",
+  "roll#",
+]);
+const NAME_ALIASES = new Set(["name", "student", "studentname"]);
+const CONTACT_ALIASES = new Set([
+  "parentcontact",
+  "phone",
+  "mobile",
+  "contact",
+  "parentphone",
+]);
+
+function findHeaderIndex(header: string[], aliases: Set<string>): number {
+  return header.findIndex((cell) => aliases.has(cell));
+}
+
+/** First row is data when col0 looks like a roll number (teachers often paste without headers). */
+function looksLikeHeaderlessData(firstRow: string[]): boolean {
+  const first = (firstRow[0] ?? "").trim();
+  return /^[1-9]\d*$/.test(first);
+}
 
 /**
  * Minimal CSV parser for student import.
@@ -103,6 +127,9 @@ function normalizeHeader(value: string): string {
 /**
  * Validates CSV text into student rows + per-row errors.
  * Does not touch the database (duplicate-in-school checks happen later).
+ *
+ * Accepts either a header row (`rollNumber,name,parentContact` — aliases ok)
+ * or headerless paste (`1,Anushka,958647826` → roll, name, optional phone).
  */
 export function parseStudentCsv(csvText: string): CsvParseResult {
   const table = parseCsv(csvText);
@@ -113,27 +140,52 @@ export function parseStudentCsv(csvText: string): CsvParseResult {
     };
   }
 
-  const header = table[0]!.map(normalizeHeader);
-  const rollIdx = header.indexOf("rollnumber");
-  const nameIdx = header.indexOf("name");
-  const contactIdx = header.indexOf("parentcontact");
+  const headerless = looksLikeHeaderlessData(table[0]!);
+  let rollIdx: number;
+  let nameIdx: number;
+  let contactIdx: number;
+  let dataStart: number;
 
-  for (const required of REQUIRED_HEADERS) {
-    if (!header.includes(required)) {
+  if (headerless) {
+    // Positional: roll, name, optional parentContact
+    rollIdx = 0;
+    nameIdx = 1;
+    contactIdx = 2;
+    dataStart = 0;
+  } else {
+    const header = table[0]!.map(normalizeHeader);
+    rollIdx = findHeaderIndex(header, ROLL_ALIASES);
+    nameIdx = findHeaderIndex(header, NAME_ALIASES);
+    contactIdx = findHeaderIndex(header, CONTACT_ALIASES);
+
+    if (rollIdx < 0) {
       return {
         rows: [],
         errors: [
           {
             row: 1,
-            message: `Missing required column "${required === "rollnumber" ? "rollNumber" : required}"`,
+            message:
+              'Missing required column "rollNumber" (or paste rows as roll,name,phone with no header)',
           },
         ],
       };
     }
+    if (nameIdx < 0) {
+      return {
+        rows: [],
+        errors: [
+          {
+            row: 1,
+            message: 'Missing required column "name"',
+          },
+        ],
+      };
+    }
+    dataStart = 1;
   }
 
   let dataRows = 0;
-  for (let i = 1; i < table.length; i += 1) {
+  for (let i = dataStart; i < table.length; i += 1) {
     const line = table[i]!;
     if (!line.every((cell) => cell.trim() === "")) {
       dataRows += 1;
@@ -155,9 +207,10 @@ export function parseStudentCsv(csvText: string): CsvParseResult {
   const errors: CsvRowIssue[] = [];
   const seenRolls = new Map<number, number>();
 
-  for (let i = 1; i < table.length; i += 1) {
+  for (let i = dataStart; i < table.length; i += 1) {
     const line = table[i]!;
-    const rowNumber = i + 1; // 1-based including header
+    // 1-based file line (header counts as line 1 when present)
+    const rowNumber = i + 1;
 
     // Skip blank lines
     if (line.every((cell) => cell.trim() === "")) {
@@ -166,7 +219,8 @@ export function parseStudentCsv(csvText: string): CsvParseResult {
 
     const rollRaw = (line[rollIdx] ?? "").trim();
     const nameRaw = (line[nameIdx] ?? "").trim();
-    const contactRaw = contactIdx >= 0 ? (line[contactIdx] ?? "").trim() : "";
+    const contactRaw =
+      contactIdx >= 0 ? (line[contactIdx] ?? "").trim() : "";
 
     const rowErrors: string[] = [];
 
@@ -210,7 +264,12 @@ export function parseStudentCsv(csvText: string): CsvParseResult {
   }
 
   if (rows.length === 0 && errors.length === 0) {
-    errors.push({ row: 1, message: "CSV has a header but no data rows" });
+    errors.push({
+      row: 1,
+      message: headerless
+        ? "CSV has no student rows"
+        : "CSV has a header but no data rows",
+    });
   }
 
   return { rows, errors };

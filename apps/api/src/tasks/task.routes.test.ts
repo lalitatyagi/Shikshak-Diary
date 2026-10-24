@@ -43,17 +43,17 @@ describe("task routes", () => {
     emails.push(email, otherEmail);
 
     const register = await registerVerifiedTeacher(app, {
-        name: "Task Teacher",
-        email,
-        password: "Password123!",
-      });
+      name: "Task Teacher",
+      email,
+      password: "Password123!",
+    });
     accessToken = (register.json() as { accessToken: string }).accessToken;
 
     const otherRegister = await registerVerifiedTeacher(app, {
-        name: "Other Task Teacher",
-        email: otherEmail,
-        password: "Password123!",
-      });
+      name: "Other Task Teacher",
+      email: otherEmail,
+      password: "Password123!",
+    });
     otherToken = (otherRegister.json() as { accessToken: string }).accessToken;
 
     await grantClassTeacherMembership(email, schoolId);

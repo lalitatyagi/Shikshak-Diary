@@ -1,7 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiFetch } from "../api";
 import { TickGridPage } from "./TickGridPage";
 
@@ -75,6 +81,10 @@ function renderGrid() {
 describe("TickGridPage status errors", () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("shows the update error and refetches the grid", async () => {
@@ -158,6 +168,45 @@ describe("TickGridPage status errors", () => {
       expect(putBodies).toHaveLength(2);
     });
     expect(putBodies[1]).toMatchObject({ status: "NOT_DONE", version: 2 });
+  });
+
+  it("undo restores the previous status after a tap", async () => {
+    const putBodies: Array<{ status: string; version: number }> = [];
+    vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+      if (String(path).includes("/grid")) {
+        return grid;
+      }
+      const body = JSON.parse(String(init?.body)) as {
+        status: string;
+        version: number;
+      };
+      putBodies.push(body);
+      return {
+        ...grid.statuses[0],
+        status: body.status,
+        version: body.version + 1,
+      };
+    });
+
+    renderGrid();
+    const cell = await screen.findByRole("button", {
+      name: "Aarav Sharma Exercise",
+    });
+    const undo = screen.getByRole("button", { name: "Undo" });
+    expect(undo.hasAttribute("disabled")).toBe(true);
+
+    cell.click();
+    await waitFor(() => {
+      expect(cell.textContent).toMatch(/Done/);
+    });
+    expect(undo.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(undo);
+    await waitFor(() => {
+      expect(putBodies).toHaveLength(2);
+    });
+    expect(putBodies[0]).toMatchObject({ status: "DONE", version: 1 });
+    expect(putBodies[1]).toMatchObject({ status: "PENDING", version: 2 });
   });
 
   it("opens a marks sheet for weekly tests and saves the score", async () => {

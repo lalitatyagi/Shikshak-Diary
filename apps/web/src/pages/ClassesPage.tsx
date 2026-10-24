@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   classSchema,
   schoolSchema,
@@ -16,6 +16,7 @@ const schoolsSchema = z.array(schoolSchema);
 
 export function ClassesPage() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [schoolId, setSchoolId] = useState("");
@@ -57,11 +58,13 @@ export function ClassesPage() {
       });
       return classSchema.parse(created);
     },
-    onSuccess: async () => {
+    onSuccess: async (classroom) => {
       setName("");
       setFormError(null);
       setShowForm(false);
       await queryClient.invalidateQueries({ queryKey: ["classes"] });
+      // Next step: import roster for the empty class.
+      void navigate(`/classes/${classroom.id}/students?import=1`);
     },
     onError: (err) => {
       setFormError(
@@ -146,13 +149,39 @@ export function ClassesPage() {
         ))}
       </ul>
 
-      {!classesQuery.isPending && classesQuery.data?.length === 0 && (
-        <p className="mt-8 text-[var(--muted)]">
-          {schools.length === 0
-            ? "No classes yet. Ask an admin to invite you to a school, then create a class here."
-            : "No classes yet. Create one below."}
-        </p>
-      )}
+      {!classesQuery.isPending &&
+        !schoolsQuery.isPending &&
+        classesQuery.data?.length === 0 &&
+        schools.length === 0 && (
+          <div className="mt-8 space-y-3 rounded-xl bg-[var(--surface)] px-4 py-5 shadow-sm">
+            <h2 className="text-lg font-medium text-[var(--accent)]">
+              No school yet
+            </h2>
+            <p className="text-sm text-[var(--muted)]">
+              Your account is ready, but you are not in a school. Ask your
+              school admin to invite{" "}
+              <span className="font-medium text-[var(--ink)]">
+                {user?.email}
+              </span>
+              . After they invite you, refresh this page and create a class.
+            </p>
+            <p className="text-sm text-[var(--muted)]">
+              Demo tip: sign in as{" "}
+              <span className="font-medium text-[var(--ink)]">
+                teacher@demo.local
+              </span>{" "}
+              (seeded class teacher) to explore a full class.
+            </p>
+          </div>
+        )}
+
+      {!classesQuery.isPending &&
+        classesQuery.data?.length === 0 &&
+        schools.length > 0 && (
+          <p className="mt-8 text-[var(--muted)]">
+            No classes yet. Create one below, then import your student roster.
+          </p>
+        )}
 
       {schoolsQuery.isSuccess && schools.length > 0 && (
         <div className="mt-8">

@@ -38,6 +38,9 @@ describe("auth routes", () => {
       await prisma.phoneOtp.deleteMany({
         where: { pendingEmail: { in: lowered } },
       });
+      await prisma.passwordResetToken.deleteMany({
+        where: { user: { email: { in: lowered } } },
+      });
       await prisma.refreshToken.deleteMany({
         where: { user: { email: { in: lowered } } },
       });
@@ -405,5 +408,68 @@ describe("auth routes", () => {
     });
 
     expect(response.statusCode).toBe(403);
+  });
+
+  it("forgot-password returns ok without revealing unknown emails", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/forgot-password",
+      payload: { email: uniqueEmail("ghost") },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "ok" });
+  });
+
+  it("resets password via log-mode token and rejects the old password", async () => {
+    const email = uniqueEmail("reset");
+    createdEmails.push(email);
+    const oldPassword = "OldPassword123!";
+    const newPassword = "NewPassword123!";
+
+    await prisma.user.create({
+      data: {
+        name: "Reset Teacher",
+        email,
+        passwordHash: await hashPassword(oldPassword),
+        role: Role.TEACHER,
+      },
+    });
+
+    const forgot = await app.inject({
+      method: "POST",
+      url: "/auth/forgot-password",
+      payload: { email },
+    });
+    expect(forgot.statusCode).toBe(200);
+    const forgotBody = forgot.json() as {
+      status: string;
+      devResetToken?: string;
+    };
+    expect(forgotBody.status).toBe("ok");
+    expect(forgotBody.devResetToken).toBeTruthy();
+
+    const reset = await app.inject({
+      method: "POST",
+      url: "/auth/reset-password",
+      payload: {
+        token: forgotBody.devResetToken,
+        password: newPassword,
+      },
+    });
+    expect(reset.statusCode).toBe(204);
+
+    const oldLogin = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email, password: oldPassword },
+    });
+    expect(oldLogin.statusCode).toBe(401);
+
+    const newLogin = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email, password: newPassword },
+    });
+    expect(newLogin.statusCode).toBe(200);
   });
 });

@@ -1,9 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Prisma, type User } from "@prisma/client";
 import {
   authUserSchema,
   maskPhone,
   type AuthUser,
+  type ForgotPasswordResponse,
   type LoginBody,
   type RegisterBody,
   type RegisterPending,
@@ -18,6 +19,11 @@ import {
   otpTtlMs,
 } from "./otp.js";
 import { sendOtpSms, smsOtpMode } from "./sms.js";
+import {
+  deliverPasswordResetEmail,
+  emailResetMode,
+  webAppOrigin,
+} from "./email-reset.js";
 
 /** Precomputed bcrypt hash so unknown emails take the same time as real ones. */
 const DUMMY_PASSWORD_HASH =
@@ -302,6 +308,88 @@ export async function getUserById(userId: string): Promise<AuthUser> {
     throw new AuthError("User not found", 404);
   }
   return toAuthUser(user);
+}
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+
+function hashPasswordResetToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+/**
+ * Starts a password reset. Always returns ok so callers cannot probe emails.
+ * In EMAIL_RESET_MODE=log, includes the raw token for the demo UI.
+ */
+export async function requestPasswordReset(
+  emailRaw: string,
+): Promise<ForgotPasswordResponse> {
+  const email = emailRaw.toLowerCase();
+  const empty: ForgotPasswordResponse = { status: "ok" };
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    // Same timing path as a real send would take is overkill; just return.
+    return empty;
+  }
+
+  const rawToken = randomBytes(32).toString("base64url");
+  const tokenHash = hashPasswordResetToken(rawToken);
+
+  await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
+  await prisma.passwordResetToken.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+    },
+  });
+
+  const resetPath = `/reset-password?token=${encodeURIComponent(rawToken)}`;
+  const resetUrl = `${webAppOrigin()}${resetPath}`;
+  await deliverPasswordResetEmail(email, resetUrl);
+
+  if (emailResetMode() === "log") {
+    return {
+      status: "ok",
+      devResetToken: rawToken,
+      devResetPath: resetPath,
+    };
+  }
+  return empty;
+}
+
+export async function resetPasswordWithToken(
+  rawToken: string,
+  newPassword: string,
+): Promise<void> {
+  const tokenHash = hashPasswordResetToken(rawToken);
+  const row = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash },
+  });
+
+  if (!row || row.usedAt || row.expiresAt.getTime() <= Date.now()) {
+    throw new AuthError("Invalid or expired reset link", 400);
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: row.userId },
+      data: { passwordHash },
+    });
+    await tx.passwordResetToken.update({
+      where: { id: row.id },
+      data: { usedAt: new Date() },
+    });
+    await tx.passwordResetToken.deleteMany({
+      where: { userId: row.userId, id: { not: row.id } },
+    });
+    await tx.refreshToken.updateMany({
+      where: { userId: row.userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  });
 }
 
 async function issueSession(

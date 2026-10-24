@@ -148,6 +148,12 @@ export function TickGridPage() {
   } | null>(null);
   const [marksDraft, setMarksDraft] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [undoSnapshot, setUndoSnapshot] = useState<{
+    statusId: string;
+    status: StatusValue;
+    marks: number | null;
+    partsDone: number | null;
+  } | null>(null);
 
   const gridQuery = useQuery({
     queryKey,
@@ -189,6 +195,7 @@ export function TickGridPage() {
     statusId: string,
     next: StatusValue,
     extras?: { marks?: number | null; partsDone?: number | null },
+    options?: { skipUndoCapture?: boolean },
   ): Promise<void> {
     const prior = queuesRef.current.get(statusId) ?? Promise.resolve();
     const job = prior
@@ -198,6 +205,15 @@ export function TickGridPage() {
         const cell = currentGrid?.statuses.find((row) => row.id === statusId);
         if (!cell) {
           return;
+        }
+
+        if (!options?.skipUndoCapture) {
+          setUndoSnapshot({
+            statusId,
+            status: cell.status,
+            marks: cell.marks ?? null,
+            partsDone: cell.partsDone ?? null,
+          });
         }
 
         // Optimistic update with explicit target status
@@ -335,6 +351,18 @@ export function TickGridPage() {
     createTaskMutation.mutate();
   }
 
+  function undoLastMark() {
+    if (!undoSnapshot) return;
+    const snap = undoSnapshot;
+    setUndoSnapshot(null);
+    void enqueueStatusUpdate(
+      snap.statusId,
+      snap.status,
+      { marks: snap.marks, partsDone: snap.partsDone },
+      { skipUndoCapture: true },
+    );
+  }
+
   return (
     <main className="mx-auto min-h-screen max-w-[100vw] px-2 py-4 sm:px-4">
       <header className="mb-3 flex items-center justify-between gap-2 px-1">
@@ -354,13 +382,23 @@ export function TickGridPage() {
             {grid?.class.name ?? "Tick grid"}
           </h1>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowNewTask((open) => !open)}
-          className="min-h-11 shrink-0 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white"
-        >
-          + New task
-        </button>
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            disabled={!undoSnapshot}
+            onClick={undoLastMark}
+            className="min-h-11 rounded-lg border border-[var(--accent)] px-3 text-sm font-medium text-[var(--accent)] disabled:opacity-40"
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowNewTask((open) => !open)}
+            className="min-h-11 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white"
+          >
+            + New task
+          </button>
+        </div>
       </header>
 
       <div className="mb-3 space-y-2 px-1">

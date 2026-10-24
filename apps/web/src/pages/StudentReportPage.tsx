@@ -96,6 +96,28 @@ export function StudentReportPage() {
     }
   }
 
+  async function shareUrl(url: string) {
+    const studentName = reportQuery.data?.student.name ?? "student";
+    const title = `Classroom Tracker report — ${studentName}`;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title, text: title, url });
+        setCopyNote("Shared");
+        return;
+      } catch {
+        // Cancelled or unsupported — fall through to WhatsApp / copy.
+      }
+    }
+    const wa = `https://wa.me/?text=${encodeURIComponent(`${title}\n${url}`)}`;
+    window.open(wa, "_blank", "noopener,noreferrer");
+  }
+
+  function whatsappHref(url: string): string {
+    const studentName = reportQuery.data?.student.name ?? "student";
+    const text = `Classroom Tracker report — ${studentName}\n${url}`;
+    return `https://wa.me/?text=${encodeURIComponent(text)}`;
+  }
+
   const linkActive = linkQuery.data?.link?.active === true;
 
   return (
@@ -193,13 +215,30 @@ export function StudentReportPage() {
               <p className="break-all rounded-lg bg-[var(--ink)]/5 px-3 py-2 text-sm">
                 {freshUrl}
               </p>
-              <button
-                type="button"
-                onClick={() => void copyUrl(freshUrl)}
-                className="min-h-11 w-full rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void copyUrl(freshUrl)}
+                  className="min-h-11 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+                >
+                  Copy link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void shareUrl(freshUrl)}
+                  className="min-h-11 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+                >
+                  Share
+                </button>
+              </div>
+              <a
+                href={whatsappHref(freshUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-11 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-medium text-white"
               >
-                Copy link
-              </button>
+                WhatsApp
+              </a>
               {copyNote && (
                 <p className="text-sm text-[var(--muted)]">{copyNote}</p>
               )}

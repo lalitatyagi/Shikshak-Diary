@@ -70,6 +70,14 @@ export function LoginPage() {
         >
           {pending ? "Signing in…" : "Sign in"}
         </button>
+        <p className="text-center text-sm">
+          <Link
+            to="/forgot-password"
+            className="underline text-[var(--accent)]"
+          >
+            Forgot password?
+          </Link>
+        </p>
       </form>
       <p className="mt-4 text-center text-sm text-[var(--muted)]">
         No account?{" "}

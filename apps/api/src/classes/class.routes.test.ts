@@ -38,17 +38,17 @@ describe("class routes", () => {
     emails.push(teacherEmail, otherEmail);
 
     const teacherRes = await registerVerifiedTeacher(app, {
-        name: "Class Teacher",
-        email: teacherEmail,
-        password: "Password123!",
-      });
+      name: "Class Teacher",
+      email: teacherEmail,
+      password: "Password123!",
+    });
     accessToken = (teacherRes.json() as { accessToken: string }).accessToken;
 
     const otherRes = await registerVerifiedTeacher(app, {
-        name: "Other Teacher",
-        email: otherEmail,
-        password: "Password123!",
-      });
+      name: "Other Teacher",
+      email: otherEmail,
+      password: "Password123!",
+    });
     otherToken = (otherRes.json() as { accessToken: string }).accessToken;
 
     await grantClassTeacherMembership(teacherEmail, schoolId);
@@ -265,10 +265,10 @@ describe("class routes", () => {
     const attackerEmail = uniqueEmail("invited-attacker");
     emails.push(attackerEmail);
     const attackerRegister = await registerVerifiedTeacher(app, {
-        name: "Invited Attacker",
-        email: attackerEmail,
-        password: "Password123!",
-      });
+      name: "Invited Attacker",
+      email: attackerEmail,
+      password: "Password123!",
+    });
     const attackerToken = (attackerRegister.json() as { accessToken: string })
       .accessToken;
     await grantClassTeacherMembership(attackerEmail, schoolId);
@@ -381,10 +381,10 @@ describe("class routes", () => {
     const otherEmail = uniqueEmail("race-teacher");
     emails.push(otherEmail);
     const registered = await registerVerifiedTeacher(app, {
-        name: "Race Teacher",
-        email: otherEmail,
-        password: "Password123!",
-      });
+      name: "Race Teacher",
+      email: otherEmail,
+      password: "Password123!",
+    });
     const otherAccess = (registered.json() as { accessToken: string })
       .accessToken;
     await grantClassTeacherMembership(otherEmail, schoolId);

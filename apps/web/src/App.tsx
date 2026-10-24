@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from "./auth";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { VerifyPhonePage } from "./pages/VerifyPhonePage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ClassesPage } from "./pages/ClassesPage";
 
 import { TickGridPage } from "./pages/TickGridPage";
@@ -37,6 +39,8 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-phone" element={<VerifyPhonePage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="/p/:token" element={<ParentReportPage />} />
         <Route
