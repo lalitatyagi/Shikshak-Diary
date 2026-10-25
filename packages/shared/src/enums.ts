@@ -12,6 +12,7 @@ export const taskTypeSchema = z.enum([
   "HOLIDAY_HOMEWORK",
   "WEEKLY_TEST",
   "NOTEBOOK_CHECK",
+  "ATTENDANCE",
 ]);
 
 export const statusValueSchema = z.enum([

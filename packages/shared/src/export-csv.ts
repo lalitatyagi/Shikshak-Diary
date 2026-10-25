@@ -26,6 +26,8 @@ export function friendlyTaskType(type: TaskType): string {
       return "Weekly test";
     case "HOLIDAY_HOMEWORK":
       return "Holiday homework";
+    case "ATTENDANCE":
+      return "Attendance";
     default:
       return type;
   }

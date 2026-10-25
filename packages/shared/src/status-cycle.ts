@@ -5,6 +5,7 @@ export function completeStatusForType(type: TaskType): StatusValue {
   if (type === "NOTEBOOK_CHECK") {
     return "CHECKED";
   }
+  // ATTENDANCE → mark all present (DONE)
   return "DONE";
 }
 
@@ -14,6 +15,9 @@ export function incompletePairForType(type: TaskType): {
 } {
   if (type === "NOTEBOOK_CHECK") {
     return { done: "CHECKED", notDone: "NOT_CHECKED" };
+  }
+  if (type === "ATTENDANCE") {
+    return { done: "DONE", notDone: "ABSENT" };
   }
   return { done: "DONE", notDone: "NOT_DONE" };
 }
@@ -39,7 +43,10 @@ export function primaryTapStatus(
 
 /** Long-press menu options (plus reset to pending). */
 export function longPressStatuses(type: TaskType): StatusValue[] {
-  void type;
+  if (type === "ATTENDANCE") {
+    // Present/Absent via tap; Late + Clear via long-press.
+    return ["INCOMPLETE", "PENDING"];
+  }
   return ["INCOMPLETE", "ABSENT", "PENDING"];
 }
 
@@ -48,13 +55,10 @@ export function isStatusAllowedForType(
   status: StatusValue,
 ): boolean {
   const { done, notDone } = incompletePairForType(type);
-  const allowed: StatusValue[] = [
-    "PENDING",
-    done,
-    notDone,
-    "INCOMPLETE",
-    "ABSENT",
-  ];
+  const allowed: StatusValue[] =
+    type === "ATTENDANCE"
+      ? ["PENDING", done, notDone, "INCOMPLETE"]
+      : ["PENDING", done, notDone, "INCOMPLETE", "ABSENT"];
   return allowed.includes(status);
 }
 
@@ -65,5 +69,8 @@ export function nextStatus(type: TaskType, current: StatusValue): StatusValue {
 
 export function allowedStatusesForType(type: TaskType): StatusValue[] {
   const { done, notDone } = incompletePairForType(type);
+  if (type === "ATTENDANCE") {
+    return ["PENDING", done, notDone, "INCOMPLETE"];
+  }
   return ["PENDING", done, notDone, "INCOMPLETE", "ABSENT"];
 }

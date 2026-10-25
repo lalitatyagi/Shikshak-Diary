@@ -3,15 +3,16 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   classSchema,
+  friendlyTaskType,
+  homeResponseSchema,
   schoolSchema,
-  type ClassDto,
+  type HomeClassCard,
   type SchoolDto,
 } from "@classroom-tracker/shared";
 import { z } from "zod";
 import { ApiError, apiFetch } from "../api";
 import { useAuth } from "../auth";
 
-const classesSchema = z.array(classSchema);
 const schoolsSchema = z.array(schoolSchema);
 
 export function ClassesPage() {
@@ -25,10 +26,10 @@ export function ClassesPage() {
   const [subjectName, setSubjectName] = useState("General");
   const [formError, setFormError] = useState<string | null>(null);
 
-  const classesQuery = useQuery({
-    queryKey: ["classes"],
+  const homeQuery = useQuery({
+    queryKey: ["home"],
     queryFn: async () =>
-      classesSchema.parse(await apiFetch<unknown>("/classes")),
+      homeResponseSchema.parse(await apiFetch<unknown>("/home")),
   });
 
   const schoolsQuery = useQuery({
@@ -38,6 +39,8 @@ export function ClassesPage() {
   });
 
   const schools = schoolsQuery.data ?? [];
+  const home = homeQuery.data;
+  const classes = home?.classes ?? [];
 
   useEffect(() => {
     if (schools.length === 1 && !schoolId) {
@@ -62,8 +65,8 @@ export function ClassesPage() {
       setName("");
       setFormError(null);
       setShowForm(false);
+      await queryClient.invalidateQueries({ queryKey: ["home"] });
       await queryClient.invalidateQueries({ queryKey: ["classes"] });
-      // Next step: import roster for the empty class.
       void navigate(`/classes/${classroom.id}/students?import=1`);
     },
     onError: (err) => {
@@ -87,10 +90,11 @@ export function ClassesPage() {
     <main className="mx-auto min-h-screen max-w-lg px-4 py-6">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--accent)]">
-            Your classes
-          </h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">{user?.name}</p>
+          <h1 className="text-2xl font-semibold text-[var(--accent)]">Today</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {user?.name}
+            {home?.today ? ` · ${home.today}` : ""}
+          </p>
         </div>
         <button
           type="button"
@@ -101,36 +105,82 @@ export function ClassesPage() {
         </button>
       </header>
 
-      {classesQuery.isPending && (
-        <p className="mt-8 text-[var(--muted)]">Loading classes…</p>
+      {homeQuery.isPending && (
+        <p className="mt-8 text-[var(--muted)]">Loading your classes…</p>
       )}
-      {classesQuery.isError && (
-        <p className="mt-8 text-red-700">Could not load classes.</p>
+      {homeQuery.isError && (
+        <p className="mt-8 text-red-700">Could not load home.</p>
       )}
 
-      <ul className="mt-6 space-y-3">
-        {(classesQuery.data ?? []).map((classroom: ClassDto) => (
+      <ul className="mt-6 space-y-4">
+        {classes.map((classroom: HomeClassCard) => (
           <li
             key={classroom.id}
-            className="rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm"
+            className="rounded-xl bg-[var(--surface)] px-4 py-4 shadow-sm"
           >
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-lg font-medium">{classroom.name}</p>
                 <p className="text-sm text-[var(--muted)]">
-                  {classroom.academicYear}
-                  {classroom.studentCount != null
-                    ? ` · ${classroom.studentCount} students`
-                    : ""}
+                  {classroom.academicYear} · {classroom.studentCount} students
                 </p>
               </div>
             </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-[var(--ink)]/5 px-3 py-2">
+                <p className="text-xs text-[var(--muted)]">Pending today</p>
+                <p className="text-xl font-semibold text-[var(--ink)]">
+                  {classroom.pendingTodayCount}
+                </p>
+              </div>
+              <div className="rounded-lg bg-[var(--ink)]/5 px-3 py-2">
+                <p className="text-xs text-[var(--muted)]">
+                  Defaulters ({home?.defaultersDays ?? 7}d)
+                </p>
+                <p className="text-xl font-semibold text-[var(--ink)]">
+                  {classroom.defaulterCount}
+                </p>
+              </div>
+            </div>
+
+            {classroom.todayTasks.length > 0 ? (
+              <ul className="mt-3 space-y-1.5">
+                {classroom.todayTasks.map((task) => (
+                  <li
+                    key={task.id}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="min-w-0 truncate">
+                      <span className="text-[var(--muted)]">
+                        {friendlyTaskType(task.type)} ·{" "}
+                      </span>
+                      {task.title}
+                    </span>
+                    <span className="shrink-0 text-[var(--muted)]">
+                      {task.pendingCount}/{task.total} left
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-[var(--muted)]">
+                No tasks assigned today. Open the grid to add one.
+              </p>
+            )}
+
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Link
                 to={`/classes/${classroom.id}/grid`}
                 className="col-span-2 flex min-h-11 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-medium text-white"
               >
                 Tick grid
+              </Link>
+              <Link
+                to={`/classes/${classroom.id}/grid?type=ATTENDANCE`}
+                className="flex min-h-11 items-center justify-center rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+              >
+                Attendance
               </Link>
               <Link
                 to={`/classes/${classroom.id}/students`}
@@ -140,18 +190,21 @@ export function ClassesPage() {
               </Link>
               <Link
                 to={`/classes/${classroom.id}/defaulters`}
-                className="flex min-h-11 items-center justify-center rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+                className="col-span-2 flex min-h-11 items-center justify-center rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
               >
                 Defaulters
+                {classroom.defaulterCount > 0
+                  ? ` (${classroom.defaulterCount})`
+                  : ""}
               </Link>
             </div>
           </li>
         ))}
       </ul>
 
-      {!classesQuery.isPending &&
+      {!homeQuery.isPending &&
         !schoolsQuery.isPending &&
-        classesQuery.data?.length === 0 &&
+        classes.length === 0 &&
         schools.length === 0 && (
           <div className="mt-8 space-y-3 rounded-xl bg-[var(--surface)] px-4 py-5 shadow-sm">
             <h2 className="text-lg font-medium text-[var(--accent)]">
@@ -175,13 +228,11 @@ export function ClassesPage() {
           </div>
         )}
 
-      {!classesQuery.isPending &&
-        classesQuery.data?.length === 0 &&
-        schools.length > 0 && (
-          <p className="mt-8 text-[var(--muted)]">
-            No classes yet. Create one below, then import your student roster.
-          </p>
-        )}
+      {!homeQuery.isPending && classes.length === 0 && schools.length > 0 && (
+        <p className="mt-8 text-[var(--muted)]">
+          No classes yet. Create one below, then import your student roster.
+        </p>
+      )}
 
       {schoolsQuery.isSuccess && schools.length > 0 && (
         <div className="mt-8">
@@ -196,7 +247,7 @@ export function ClassesPage() {
           ) : (
             <form
               onSubmit={onCreateSubmit}
-              className="space-y-3 rounded-xl bg-[var(--surface)] p-4 shadow-sm"
+              className="space-y-3 rounded-xl bg-[var(--surface)] p-5 shadow-sm"
             >
               <h2 className="text-lg font-medium text-[var(--accent)]">
                 New class

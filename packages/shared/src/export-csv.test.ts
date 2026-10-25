@@ -26,6 +26,7 @@ describe("friendly labels", () => {
   it("maps task types and statuses for parents", () => {
     expect(friendlyTaskType("HOLIDAY_HOMEWORK")).toBe("Holiday homework");
     expect(friendlyTaskType("NOTEBOOK_CHECK")).toBe("Notebook check");
+    expect(friendlyTaskType("ATTENDANCE")).toBe("Attendance");
     expect(friendlyStatus("PENDING")).toBe("Not marked yet");
     expect(friendlyStatus("NOT_CHECKED")).toBe("Not checked");
     expect(friendlyStatus("ABSENT")).toBe("Absent");

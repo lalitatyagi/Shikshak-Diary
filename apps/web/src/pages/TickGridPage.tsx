@@ -29,6 +29,7 @@ const TYPE_FILTERS: Array<{ value: "" | TaskType; label: string }> = [
   { value: "NOTEBOOK_CHECK", label: "NB" },
   { value: "WEEKLY_TEST", label: "Test" },
   { value: "HOLIDAY_HOMEWORK", label: "Holiday" },
+  { value: "ATTENDANCE", label: "Att" },
 ];
 
 const DAY_FILTERS = [7, 14, 30] as const;
@@ -58,6 +59,18 @@ function cellLabel(
   task: ClassGridDto["tasks"][number],
   cell: TaskStatusDto,
 ): string {
+  if (task.type === "ATTENDANCE") {
+    switch (cell.status) {
+      case "DONE":
+        return "P";
+      case "ABSENT":
+        return "A";
+      case "INCOMPLETE":
+        return "L";
+      default:
+        return "—";
+    }
+  }
   if (task.type === "WEEKLY_TEST") {
     if (cell.marks != null) {
       return `${cell.marks}/${task.maxMarks ?? "?"}`;
@@ -92,7 +105,10 @@ function statusKey(taskId: string, studentId: string): string {
   return `${taskId}:${studentId}`;
 }
 
-function menuLabel(status: StatusValue): string {
+function menuLabel(status: StatusValue, taskType: TaskType): string {
+  if (taskType === "ATTENDANCE" && status === "INCOMPLETE") {
+    return "Late";
+  }
   switch (status) {
     case "INCOMPLETE":
       return "Incomplete";
@@ -318,6 +334,43 @@ export function TickGridPage() {
       setShowNewTask(false);
       setNewTitle("");
       await queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+
+  const takeAttendanceMutation = useMutation({
+    mutationFn: async () => {
+      const grid = queryClient.getQueryData<ClassGridDto>(queryKey);
+      if (!grid) {
+        throw new Error("Grid not loaded");
+      }
+      const today = toKolkataCalendarDate(new Date());
+      const existing = grid.tasks.find(
+        (task) => task.type === "ATTENDANCE" && task.assignedOn === today,
+      );
+      if (existing) {
+        return existing;
+      }
+      const body = createTaskBodySchema.parse({
+        subjectId: grid.defaultSubjectId,
+        type: "ATTENDANCE",
+        title: `Attendance ${today}`,
+        assignedOn: today,
+        dueOn: today,
+      });
+      return taskSchema.parse(
+        await apiFetch(`/classes/${classId}/tasks`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      );
+    },
+    onSuccess: async () => {
+      patchFilters({ type: "ATTENDANCE" });
+      await queryClient.invalidateQueries({
+        queryKey: ["grid", classId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["home"] });
     },
   });
 
@@ -382,7 +435,7 @@ export function TickGridPage() {
             {grid?.class.name ?? "Tick grid"}
           </h1>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <button
             type="button"
             disabled={!undoSnapshot}
@@ -390,6 +443,14 @@ export function TickGridPage() {
             className="min-h-11 rounded-lg border border-[var(--accent)] px-3 text-sm font-medium text-[var(--accent)] disabled:opacity-40"
           >
             Undo
+          </button>
+          <button
+            type="button"
+            disabled={takeAttendanceMutation.isPending || !grid}
+            onClick={() => takeAttendanceMutation.mutate()}
+            className="min-h-11 rounded-lg border border-[var(--accent)] px-3 text-sm font-medium text-[var(--accent)] disabled:opacity-40"
+          >
+            Attendance
           </button>
           <button
             type="button"
@@ -493,6 +554,7 @@ export function TickGridPage() {
               <option value="NOTEBOOK_CHECK">Notebook check</option>
               <option value="WEEKLY_TEST">Weekly test</option>
               <option value="HOLIDAY_HOMEWORK">Holiday homework</option>
+              <option value="ATTENDANCE">Attendance</option>
             </select>
           </label>
           {newType === "WEEKLY_TEST" && (
@@ -717,8 +779,8 @@ export function TickGridPage() {
             </table>
           </div>
           <p className="mt-3 px-1 text-xs text-[var(--muted)]">
-            Tap: homework done ↔ not done; test opens marks entry; holiday
-            advances parts. Long-press: incomplete / absent.
+            Tap: HW done ↔ not; attendance P ↔ A; test opens marks; holiday
+            advances parts. Long-press: incomplete / late / absent / clear.
           </p>
         </>
       )}
@@ -848,7 +910,7 @@ export function TickGridPage() {
                     setMenu(null);
                   }}
                 >
-                  {menuLabel(status)}
+                  {menuLabel(status, menu.taskType)}
                 </button>
               ))}
             </div>

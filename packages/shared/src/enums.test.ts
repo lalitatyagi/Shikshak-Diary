@@ -17,6 +17,7 @@ describe("shared enums", () => {
       "HOLIDAY_HOMEWORK",
       "WEEKLY_TEST",
       "NOTEBOOK_CHECK",
+      "ATTENDANCE",
     ]);
   });
 

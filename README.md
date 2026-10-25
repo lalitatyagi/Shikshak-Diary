@@ -14,10 +14,11 @@ classroom — marking the whole class should take under a minute.
 **V3 complete** — usable V1/V2 product plus PWA offline marks, class-teacher
 RBAC, Playwright smoke E2E, and a shared-package coverage floor.
 
-**Deploy (in progress):** Neon DB is migrated and seeded. Apply the Render
-Blueprint + Vercel project next — checklist in [docs/DEPLOY.md](docs/DEPLOY.md).
+**Deploy (almost live):** Neon is migrated + seeded. Latest `main` is pushed
+with a demo-friendly Blueprint (`SMS_OTP_MODE=log`). Finish Render + Vercel
+once (checklist: [docs/DEPLOY.md](docs/DEPLOY.md)), then reply with both URLs.
 
-Live demo: _set URLs after Render + Vercel_
+Live demo: _pending your Render + Vercel login_
 
 - Web: `https://<your-app>.vercel.app`
 - API health: `https://classroom-tracker-api.onrender.com/health` _(expected Blueprint name)_
@@ -42,11 +43,13 @@ Phone-width captures from the seeded demo class **8-B** (40 students).
 ## What it does
 
 - **Sign in / Sign up** — email + password + Indian mobile; SMS OTP (Twilio) before the account is created; school access still needs an admin invite
-- **Classes** — list + **New class** for schools you belong to (demo seed has one school)
+- **Home dashboard** — per class: today's tasks with pending counts, rolling defaulters, quick links to grid / students / defaulters
+- **Classes** — **New class** for schools you belong to (demo seed has one school)
 - **CSV roster import** — class teachers import students from a file or paste (per-row errors)
 - **Tick grid** — students × tasks; tap to cycle status; bulk “mark all done”
-- **Task types** — daily homework, notebook check, weekly test (marks), holiday homework (parts)
-- **Defaulters** — students with 2+ `NOT_DONE` / `NOT_CHECKED` in the last N Kolkata days
+- **Task types** — daily homework, notebook check, weekly test (marks), holiday homework (parts), **attendance** (present / absent / late on the same grid)
+- **Take attendance** — one tap creates today's attendance column; tap cycles P ↔ A
+- **Defaulters** — students with 2+ `NOT_DONE` / `NOT_CHECKED` in the last N Kolkata days; **WhatsApp** parents (per student + copy-all) when `parentContact` is set
 - **Student report** — per-student summary; parent share link (hashed URL); CSV / print PDF
 - **Offline marks** — PWA caches the last grid; status taps queue and sync on reconnect
 - **RBAC** — class teachers manage roster + parent links; subject teachers mark the grid
@@ -156,6 +159,7 @@ npx playwright install chromium
 | POST | `/auth/refresh` | Rotates tokens using httpOnly `refreshToken` cookie |
 | POST | `/auth/logout` | Revokes the refresh token and clears the cookie |
 | GET | `/auth/me` | Requires `Authorization: Bearer <accessToken>` |
+| GET | `/home` | Teacher home: today's tasks + defaulter counts per class |
 
 ### Classes & students
 
@@ -185,7 +189,8 @@ per-row error (no rename / enroll).
 | POST | `/tasks/:taskId/mark-all-complete` | Only updates **PENDING** → DONE/CHECKED |
 
 Create types: `DAILY_HOMEWORK`, `NOTEBOOK_CHECK`, `WEEKLY_TEST` (requires
-`maxMarks`), `HOLIDAY_HOMEWORK` (requires `totalParts`).  
+`maxMarks`), `HOLIDAY_HOMEWORK` (requires `totalParts`), `ATTENDANCE`
+(present=`DONE` / absent=`ABSENT` / late=`INCOMPLETE`).  
 `assignedOn` / `dueOn` are **Asia/Kolkata** calendar dates (`YYYY-MM-DD`).
 
 ### Defaulters, reports, parents, export

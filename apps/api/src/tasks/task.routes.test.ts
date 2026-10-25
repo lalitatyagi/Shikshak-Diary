@@ -168,6 +168,30 @@ describe("task routes", () => {
     expect(pendingCount).toBe(3);
   });
 
+  it("creates ATTENDANCE with PENDING statuses for the class", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        subjectId,
+        type: "ATTENDANCE",
+        title: "Attendance 2026-10-03",
+        assignedOn: "2026-10-03",
+        dueOn: "2026-10-03",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json() as {
+      id: string;
+      type: string;
+      statusCount: number;
+    };
+    expect(body.type).toBe("ATTENDANCE");
+    expect(body.statusCount).toBe(3);
+  });
+
   it("creates WEEKLY_TEST and HOLIDAY_HOMEWORK with typed fields", async () => {
     const weekly = await app.inject({
       method: "POST",

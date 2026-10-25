@@ -21,9 +21,16 @@ describe("primaryTapStatus", () => {
     expect(primaryTapStatus("NOTEBOOK_CHECK", "NOT_CHECKED")).toBe("CHECKED");
   });
 
+  it("toggles Present (DONE) ↔ Absent for attendance", () => {
+    expect(primaryTapStatus("ATTENDANCE", "PENDING")).toBe("DONE");
+    expect(primaryTapStatus("ATTENDANCE", "DONE")).toBe("ABSENT");
+    expect(primaryTapStatus("ATTENDANCE", "ABSENT")).toBe("DONE");
+  });
+
   it("does not allow CHECKED on homework", () => {
     expect(isStatusAllowedForType("DAILY_HOMEWORK", "CHECKED")).toBe(false);
     expect(isStatusAllowedForType("NOTEBOOK_CHECK", "DONE")).toBe(false);
+    expect(isStatusAllowedForType("ATTENDANCE", "NOT_DONE")).toBe(false);
   });
 });
 
@@ -35,12 +42,17 @@ describe("longPressStatuses", () => {
       "PENDING",
     ]);
   });
+
+  it("offers late and pending for attendance", () => {
+    expect(longPressStatuses("ATTENDANCE")).toEqual(["INCOMPLETE", "PENDING"]);
+  });
 });
 
 describe("completeStatusForType", () => {
   it("maps bulk complete to DONE or CHECKED by type", () => {
     expect(completeStatusForType("DAILY_HOMEWORK")).toBe("DONE");
     expect(completeStatusForType("NOTEBOOK_CHECK")).toBe("CHECKED");
+    expect(completeStatusForType("ATTENDANCE")).toBe("DONE");
   });
 });
 
@@ -59,6 +71,12 @@ describe("allowedStatusesForType / nextStatus", () => {
       "NOT_CHECKED",
       "INCOMPLETE",
       "ABSENT",
+    ]);
+    expect(allowedStatusesForType("ATTENDANCE")).toEqual([
+      "PENDING",
+      "DONE",
+      "ABSENT",
+      "INCOMPLETE",
     ]);
   });
 
