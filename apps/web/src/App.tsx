@@ -6,6 +6,7 @@ import { VerifyPhonePage } from "./pages/VerifyPhonePage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ClassesPage } from "./pages/ClassesPage";
+import { AdminSchoolsPage } from "./pages/AdminSchoolsPage";
 
 import { TickGridPage } from "./pages/TickGridPage";
 import { DefaultersPage } from "./pages/DefaultersPage";
@@ -48,6 +49,14 @@ export function App() {
           element={
             <Protected>
               <ClassesPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin/schools"
+          element={
+            <Protected>
+              <AdminSchoolsPage />
             </Protected>
           }
         />

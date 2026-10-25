@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { roleSchema } from "./enums.js";
 
 export const createSchoolBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -8,6 +9,14 @@ export const inviteSchoolMemberBodySchema = z.object({
   email: z.string().trim().email(),
   /** Admin may promote an invited teacher to class teacher. */
   role: z.enum(["TEACHER", "CLASS_TEACHER"]).optional(),
+});
+
+export const schoolMemberSchema = z.object({
+  schoolId: z.string().min(1),
+  userId: z.string().min(1),
+  email: z.string().email(),
+  name: z.string().min(1),
+  role: roleSchema,
 });
 
 export const createClassBodySchema = z.object({
@@ -63,5 +72,6 @@ export type CreateClassBody = z.infer<typeof createClassBodySchema>;
 export type SchoolDto = z.infer<typeof schoolSchema>;
 export type ClassDto = z.infer<typeof classSchema>;
 export type StudentDto = z.infer<typeof studentSchema>;
+export type SchoolMemberDto = z.infer<typeof schoolMemberSchema>;
 export type CsvImportBody = z.infer<typeof csvImportBodySchema>;
 export type CsvImportResult = z.infer<typeof csvImportResultSchema>;

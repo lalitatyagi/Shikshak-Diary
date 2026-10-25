@@ -10,6 +10,11 @@ export const SEED = {
     /** Plain password used only by the seed script (hashed before insert). */
     password: "Teacher123!",
   },
+  admin: {
+    name: "Demo Admin",
+    email: "admin@demo.local",
+    password: "Admin123!",
+  },
   studentCount: 40,
 } as const;
 

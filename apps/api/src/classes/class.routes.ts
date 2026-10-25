@@ -6,11 +6,13 @@ import {
   csvImportResultSchema,
   inviteSchoolMemberBodySchema,
   paginatedResponseSchema,
+  schoolMemberSchema,
   schoolSchema,
   studentSchema,
   studentsListQuerySchema,
 } from "@classroom-tracker/shared";
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import {
   classManagerRoles,
   requireAuth,
@@ -24,9 +26,12 @@ import {
   importStudentsFromCsv,
   inviteSchoolMember,
   listClassesForUser,
+  listSchoolMembers,
   listSchoolsForUser,
   listStudentsForClass,
 } from "./class.service.js";
+
+const schoolMembersSchema = z.array(schoolMemberSchema);
 
 const paginatedStudentsSchema = paginatedResponseSchema(studentSchema);
 
@@ -67,7 +72,21 @@ export async function classRoutes(app: FastifyInstance): Promise<void> {
           parsed.data.email,
           parsed.data.role,
         );
-        return reply.status(201).send(member);
+        return reply.status(201).send(schoolMemberSchema.parse(member));
+      } catch (error) {
+        return sendHttpError(reply, error);
+      }
+    },
+  );
+
+  app.get(
+    "/schools/:schoolId/members",
+    { preHandler: [requireAuth, requireRole("ADMIN")] },
+    async (request, reply) => {
+      const { schoolId } = request.params as { schoolId: string };
+      try {
+        const members = await listSchoolMembers(schoolId);
+        return reply.send(schoolMembersSchema.parse(members));
       } catch (error) {
         return sendHttpError(reply, error);
       }

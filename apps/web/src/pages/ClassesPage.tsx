@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  canManageSchool,
   classSchema,
   friendlyTaskType,
   homeResponseSchema,
@@ -96,13 +97,23 @@ export function ClassesPage() {
             {home?.today ? ` · ${home.today}` : ""}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="min-h-11 rounded-lg px-3 text-sm text-[var(--muted)] underline"
-        >
-          Log out
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          {user && canManageSchool(user.role) && (
+            <Link
+              to="/admin/schools"
+              className="min-h-11 text-sm font-medium text-[var(--accent)] underline"
+            >
+              School admin
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="min-h-11 rounded-lg px-3 text-sm text-[var(--muted)] underline"
+          >
+            Log out
+          </button>
+        </div>
       </header>
 
       {homeQuery.isPending && (
@@ -219,11 +230,15 @@ export function ClassesPage() {
               . After they invite you, refresh this page and create a class.
             </p>
             <p className="text-sm text-[var(--muted)]">
-              Demo tip: sign in as{" "}
+              Demo tip:{" "}
               <span className="font-medium text-[var(--ink)]">
                 teacher@demo.local
               </span>{" "}
-              (seeded class teacher) to explore a full class.
+              has a full class;{" "}
+              <span className="font-medium text-[var(--ink)]">
+                admin@demo.local
+              </span>{" "}
+              can invite teachers under School admin.
             </p>
           </div>
         )}

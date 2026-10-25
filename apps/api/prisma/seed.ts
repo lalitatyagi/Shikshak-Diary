@@ -35,13 +35,29 @@ async function seed(): Promise<void> {
     },
   });
   await prisma.auditLog.deleteMany({
-    where: { user: { email: SEED.teacher.email } },
+    where: {
+      user: {
+        email: { in: [SEED.teacher.email, SEED.admin.email] },
+      },
+    },
   });
-  await prisma.user.deleteMany({ where: { email: SEED.teacher.email } });
+  await prisma.user.deleteMany({
+    where: { email: { in: [SEED.teacher.email, SEED.admin.email] } },
+  });
   await prisma.school.deleteMany({ where: { name: SEED.schoolName } });
 
   const school = await prisma.school.create({
     data: { name: SEED.schoolName },
+  });
+
+  const adminPasswordHash = await hashPassword(SEED.admin.password);
+  await prisma.user.create({
+    data: {
+      name: SEED.admin.name,
+      email: SEED.admin.email,
+      passwordHash: adminPasswordHash,
+      role: Role.ADMIN,
+    },
   });
 
   const teacher = await prisma.user.create({
@@ -171,6 +187,7 @@ async function seed(): Promise<void> {
 
   console.log("Seed complete:");
   console.log(`  School:   ${school.name}`);
+  console.log(`  Admin:    ${SEED.admin.email} / ${SEED.admin.password}`);
   console.log(`  Teacher:  ${teacher.email} / ${SEED.teacher.password}`);
   console.log(`  Class:    ${classroom.name} (${classroom.academicYear})`);
   console.log(`  Subject:  ${subject.name}`);

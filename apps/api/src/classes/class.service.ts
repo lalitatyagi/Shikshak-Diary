@@ -111,7 +111,13 @@ export async function inviteSchoolMember(
   schoolId: string,
   email: string,
   role?: "TEACHER" | "CLASS_TEACHER",
-): Promise<{ schoolId: string; userId: string; email: string; role: Role }> {
+): Promise<{
+  schoolId: string;
+  userId: string;
+  email: string;
+  name: string;
+  role: Role;
+}> {
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
   if (!school) {
     throw new HttpError("School not found", 404);
@@ -145,15 +151,50 @@ export async function inviteSchoolMember(
 
   const updated = await prisma.user.findUniqueOrThrow({
     where: { id: user.id },
-    select: { role: true, email: true },
+    select: { role: true, email: true, name: true },
   });
 
   return {
     schoolId,
     userId: user.id,
     email: updated.email,
+    name: updated.name,
     role: updated.role,
   };
+}
+
+/** Teachers (and class teachers) currently in a school. ADMIN only. */
+export async function listSchoolMembers(
+  schoolId: string,
+): Promise<
+  Array<{
+    schoolId: string;
+    userId: string;
+    email: string;
+    name: string;
+    role: Role;
+  }>
+> {
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
+  if (!school) {
+    throw new HttpError("School not found", 404);
+  }
+
+  const members = await prisma.schoolMember.findMany({
+    where: { schoolId },
+    include: {
+      user: { select: { id: true, email: true, name: true, role: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return members.map((row) => ({
+    schoolId,
+    userId: row.user.id,
+    email: row.user.email,
+    name: row.user.name,
+    role: row.user.role,
+  }));
 }
 
 export async function createClassForTeacher(

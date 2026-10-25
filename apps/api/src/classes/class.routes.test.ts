@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { Role } from "@prisma/client";
 import { loadEnv } from "../load-env.js";
 import { buildApp } from "../app.js";
 import { prisma } from "../db.js";
+import { hashPassword } from "../auth/password.js";
 import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
@@ -438,5 +440,66 @@ describe("class routes", () => {
     });
     expect(students).toHaveLength(1);
     expect(["From A", "From B"]).toContain(students[0]?.name);
+  });
+
+  it("lets an admin invite a registered teacher and list members", async () => {
+    const adminEmail = uniqueEmail("invite-admin");
+    const inviteeEmail = uniqueEmail("invitee");
+    emails.push(adminEmail, inviteeEmail);
+
+    await prisma.user.create({
+      data: {
+        name: "Invite Admin",
+        email: adminEmail,
+        passwordHash: await hashPassword("Password123!"),
+        role: Role.ADMIN,
+      },
+    });
+
+    const adminLogin = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: adminEmail, password: "Password123!" },
+    });
+    const adminToken = (adminLogin.json() as { accessToken: string })
+      .accessToken;
+
+    await registerVerifiedTeacher(app, {
+      name: "Invitee Teacher",
+      email: inviteeEmail,
+      password: "Password123!",
+    });
+
+    const invite = await app.inject({
+      method: "POST",
+      url: `/schools/${schoolId}/members`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { email: inviteeEmail, role: "TEACHER" },
+    });
+    expect(invite.statusCode).toBe(201);
+    expect(invite.json()).toMatchObject({
+      schoolId,
+      email: inviteeEmail.toLowerCase(),
+      role: "TEACHER",
+      name: "Invitee Teacher",
+    });
+
+    const members = await app.inject({
+      method: "GET",
+      url: `/schools/${schoolId}/members`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(members.statusCode).toBe(200);
+    const list = members.json() as Array<{ email: string }>;
+    expect(list.some((m) => m.email === inviteeEmail.toLowerCase())).toBe(
+      true,
+    );
+
+    const forbidden = await app.inject({
+      method: "GET",
+      url: `/schools/${schoolId}/members`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(forbidden.statusCode).toBe(403);
   });
 });

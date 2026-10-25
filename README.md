@@ -23,10 +23,12 @@ Live demo: _pending your Render + Vercel login_
 - Web: `https://<your-app>.vercel.app`
 - API health: `https://classroom-tracker-api.onrender.com/health` _(expected Blueprint name)_
 
-Demo teacher (after `npm run db:seed`; seed refuses `NODE_ENV=production`):
+Demo logins (after `npm run db:seed`; seed refuses `NODE_ENV=production`):
 
-- Email: `teacher@demo.local`
-- Password: `Teacher123!`
+| Role | Email | Password |
+| --- | --- | --- |
+| Class teacher | `teacher@demo.local` | `Teacher123!` |
+| Admin (invite teachers) | `admin@demo.local` | `Admin123!` |
 
 ## Screenshots
 
@@ -42,7 +44,7 @@ Phone-width captures from the seeded demo class **8-B** (40 students).
 
 ## What it does
 
-- **Sign in / Sign up** — email + password + Indian mobile; SMS OTP (Twilio) before the account is created; school access still needs an admin invite
+- **Sign in / Sign up** — email + password + Indian mobile; SMS OTP before the account is created; school access needs an **admin invite** (`/admin/schools`)
 - **Home dashboard** — per class: today's tasks with pending counts, rolling defaulters, quick links to grid / students / defaulters
 - **Classes** — **New class** for schools you belong to (demo seed has one school)
 - **CSV roster import** — class teachers import students from a file or paste (per-row errors)
@@ -168,6 +170,7 @@ npx playwright install chromium
 | GET | `/schools` | Schools the caller belongs to (ADMIN: all) |
 | POST | `/schools` | ADMIN creates a school |
 | POST | `/schools/:schoolId/members` | ADMIN invites by email; optional `role`: `TEACHER` \| `CLASS_TEACHER` |
+| GET | `/schools/:schoolId/members` | ADMIN lists school members |
 | GET | `/classes` | Classes assigned to the teacher |
 | POST | `/classes` | Create a class in a school the teacher belongs to |
 | GET | `/classes/:classId/students` | Paginated students (`page`, `pageSize` default 40, optional `q`) |
