@@ -28,7 +28,8 @@
     "db:migrate": "npm run db:migrate -w @classroom-tracker/api",
     "db:migrate:dev": "npm run db:migrate:dev -w @classroom-tracker/api",
     "db:seed": "npm run db:seed -w @classroom-tracker/api",
-    "db:reset": "npm run db:reset -w @classroom-tracker/api"
+    "db:reset": "npm run db:reset -w @classroom-tracker/api",
+    "audit:production": "node scripts/audit-production.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

@@ -64,7 +64,8 @@ jobs:
 
       - name: Dependency audit (production)
         # Vitest/tinypool advisories are dev-only; keep the production tree clean.
-        run: npm audit --audit-level=high --omit=dev
+        # Zod GHSA-mrhx-c7xc-m3w5 has no 3.x patch yet — see scripts/audit-production.mjs.
+        run: node scripts/audit-production.mjs
 
       - name: Test
         run: npm test
