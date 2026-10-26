@@ -14,11 +14,21 @@ describe("studentsListQuerySchema", () => {
       page: 1,
       pageSize: 40,
       q: undefined,
+      missingContact: undefined,
     });
   });
 
   it("trims empty q to undefined", () => {
     expect(studentsListQuerySchema.parse({ q: "  " }).q).toBeUndefined();
+  });
+
+  it("parses missingContact flag", () => {
+    expect(studentsListQuerySchema.parse({ missingContact: "1" }).missingContact).toBe(
+      true,
+    );
+    expect(
+      studentsListQuerySchema.parse({ missingContact: "false" }).missingContact,
+    ).toBe(false);
   });
 });
 

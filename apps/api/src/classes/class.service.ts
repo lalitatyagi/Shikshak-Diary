@@ -1,19 +1,25 @@
 import { Prisma } from "@prisma/client";
 import {
   classSchema,
+  normalizeIndianPhone,
+  schoolMemberSchema,
   schoolSchema,
   startOfTodayKolkata,
   studentSchema,
   toPaginated,
+  type AssignTeacherBody,
   type ClassDto,
   type CreateClassBody,
+  type CreateTeacherBody,
   type CsvImportResult,
   type Role,
   type SchoolDto,
+  type SchoolMemberDto,
   type StudentDto,
 } from "@classroom-tracker/shared";
 import { prisma } from "../db.js";
 import { writeAudit } from "../audit.js";
+import { hashPassword } from "../auth/password.js";
 import { HttpError } from "../errors.js";
 import { parseStudentCsv, type ParsedCsvRow } from "./csv.js";
 
@@ -154,27 +160,77 @@ export async function inviteSchoolMember(
     select: { role: true, email: true, name: true },
   });
 
-  return {
+  return schoolMemberSchema.parse({
     schoolId,
     userId: user.id,
     email: updated.email,
     name: updated.name,
     role: updated.role,
-  };
+    classNames: [],
+  });
+}
+
+/**
+ * Admin creates a teacher login and school membership in one step
+ * (skips SMS OTP — for school office onboarding).
+ */
+export async function createTeacherInSchool(
+  schoolId: string,
+  input: CreateTeacherBody,
+): Promise<SchoolMemberDto> {
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
+  if (!school) {
+    throw new HttpError("School not found", 404);
+  }
+
+  const email = input.email.toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    throw new HttpError("A user with that email already exists", 409);
+  }
+
+  let phone: string | null = null;
+  if (input.phone && input.phone.trim().length > 0) {
+    phone = normalizeIndianPhone(input.phone);
+    if (!phone) {
+      throw new HttpError("Use a valid 10-digit Indian mobile number", 400);
+    }
+    const phoneTaken = await prisma.user.findUnique({ where: { phone } });
+    if (phoneTaken) {
+      throw new HttpError("That mobile number is already registered", 409);
+    }
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  const user = await prisma.user.create({
+    data: {
+      name: input.name,
+      email,
+      passwordHash,
+      role: input.role,
+      phone,
+      phoneVerifiedAt: phone ? new Date() : null,
+    },
+  });
+
+  await prisma.schoolMember.create({
+    data: { userId: user.id, schoolId },
+  });
+
+  return schoolMemberSchema.parse({
+    schoolId,
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    classNames: [],
+  });
 }
 
 /** Teachers (and class teachers) currently in a school. ADMIN only. */
 export async function listSchoolMembers(
   schoolId: string,
-): Promise<
-  Array<{
-    schoolId: string;
-    userId: string;
-    email: string;
-    name: string;
-    role: Role;
-  }>
-> {
+): Promise<SchoolMemberDto[]> {
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
   if (!school) {
     throw new HttpError("School not found", 404);
@@ -183,18 +239,114 @@ export async function listSchoolMembers(
   const members = await prisma.schoolMember.findMany({
     where: { schoolId },
     include: {
-      user: { select: { id: true, email: true, name: true, role: true } },
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          teacherAssignments: {
+            where: { class: { schoolId } },
+            include: { class: { select: { name: true } } },
+          },
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
   });
 
-  return members.map((row) => ({
-    schoolId,
-    userId: row.user.id,
-    email: row.user.email,
-    name: row.user.name,
-    role: row.user.role,
-  }));
+  return members.map((row) =>
+    schoolMemberSchema.parse({
+      schoolId,
+      userId: row.user.id,
+      email: row.user.email,
+      name: row.user.name,
+      role: row.user.role,
+      classNames: row.user.teacherAssignments.map((a) => a.class.name),
+    }),
+  );
+}
+
+export async function listClassesForSchool(
+  schoolId: string,
+): Promise<ClassDto[]> {
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
+  if (!school) {
+    throw new HttpError("School not found", 404);
+  }
+
+  const classes = await prisma.class.findMany({
+    where: { schoolId },
+    orderBy: [{ academicYear: "desc" }, { name: "asc" }],
+    include: { _count: { select: { enrollments: true } } },
+  });
+  return classes.map((c) => toClassDto(c, c._count.enrollments));
+}
+
+/** Assign a school member to teach a class (creates subject if needed). */
+export async function assignTeacherToClass(
+  classId: string,
+  input: AssignTeacherBody,
+): Promise<{ classId: string; teacherId: string; subjectName: string }> {
+  const classroom = await prisma.class.findUnique({ where: { id: classId } });
+  if (!classroom) {
+    throw new HttpError("Class not found", 404);
+  }
+
+  const membership = await prisma.schoolMember.findUnique({
+    where: {
+      userId_schoolId: {
+        userId: input.teacherId,
+        schoolId: classroom.schoolId,
+      },
+    },
+  });
+  if (!membership) {
+    throw new HttpError("Teacher is not a member of this school", 400);
+  }
+
+  const teacher = await prisma.user.findUnique({
+    where: { id: input.teacherId },
+  });
+  if (
+    !teacher ||
+    (teacher.role !== "TEACHER" &&
+      teacher.role !== "CLASS_TEACHER" &&
+      teacher.role !== "ADMIN")
+  ) {
+    throw new HttpError("User cannot be assigned to a class", 400);
+  }
+
+  let subject = await prisma.subject.findFirst({
+    where: { schoolId: classroom.schoolId, name: input.subjectName },
+  });
+  if (!subject) {
+    subject = await prisma.subject.create({
+      data: { schoolId: classroom.schoolId, name: input.subjectName },
+    });
+  }
+
+  await prisma.teacherClassSubject.upsert({
+    where: {
+      teacherId_classId_subjectId: {
+        teacherId: input.teacherId,
+        classId,
+        subjectId: subject.id,
+      },
+    },
+    create: {
+      teacherId: input.teacherId,
+      classId,
+      subjectId: subject.id,
+    },
+    update: {},
+  });
+
+  return {
+    classId,
+    teacherId: input.teacherId,
+    subjectName: subject.name,
+  };
 }
 
 export async function createClassForTeacher(
@@ -298,7 +450,7 @@ export async function assertCanAccessClass(
   classId: string,
   userId: string,
   role: Role,
-): Promise<{ id: string; schoolId: string }> {
+): Promise<{ id: string; schoolId: string; name: string }> {
   const classroom = await prisma.class.findUnique({ where: { id: classId } });
   if (!classroom) {
     throw new HttpError("Class not found", 404);
@@ -318,11 +470,24 @@ export async function assertCanAccessClass(
   return classroom;
 }
 
+function missingParentContactStudentWhere(): {
+  OR: Array<{ parentContact: string | null }>;
+} {
+  return {
+    OR: [{ parentContact: null }, { parentContact: "" }],
+  };
+}
+
 export async function listStudentsForClass(
   classId: string,
   userId: string,
   role: Role,
-  options: { page: number; pageSize: number; q?: string } = {
+  options: {
+    page: number;
+    pageSize: number;
+    q?: string;
+    missingContact?: boolean;
+  } = {
     page: 1,
     pageSize: 40,
   },
@@ -332,16 +497,28 @@ export async function listStudentsForClass(
   pageSize: number;
   total: number;
   totalPages: number;
+  missingParentContactCount: number;
 }> {
   await assertCanAccessClass(classId, userId, role);
 
-  const studentFilter = studentSearchWhere(options.q);
+  const searchFilter = studentSearchWhere(options.q);
+  const contactFilter = options.missingContact
+    ? missingParentContactStudentWhere()
+    : undefined;
+
+  let studentWhere: Record<string, unknown> | undefined;
+  if (searchFilter && contactFilter) {
+    studentWhere = { AND: [searchFilter, contactFilter] };
+  } else {
+    studentWhere = searchFilter ?? contactFilter;
+  }
+
   const where = {
     classId,
-    ...(studentFilter ? { student: studentFilter } : {}),
+    ...(studentWhere ? { student: studentWhere } : {}),
   };
 
-  const [total, enrollments] = await Promise.all([
+  const [total, enrollments, missingParentContactCount] = await Promise.all([
     prisma.enrollment.count({ where }),
     prisma.enrollment.findMany({
       where,
@@ -350,14 +527,51 @@ export async function listStudentsForClass(
       skip: (options.page - 1) * options.pageSize,
       take: options.pageSize,
     }),
+    prisma.enrollment.count({
+      where: {
+        classId,
+        student: missingParentContactStudentWhere(),
+      },
+    }),
   ]);
 
-  return toPaginated(
-    enrollments.map((enrollment) => toStudentDto(enrollment.student)),
-    total,
-    options.page,
-    options.pageSize,
-  );
+  return {
+    ...toPaginated(
+      enrollments.map((enrollment) => toStudentDto(enrollment.student)),
+      total,
+      options.page,
+      options.pageSize,
+    ),
+    missingParentContactCount,
+  };
+}
+
+/** Class teacher / admin sets or clears a student's parent phone. */
+export async function updateStudentInClass(
+  classId: string,
+  studentId: string,
+  userId: string,
+  role: Role,
+  input: { parentContact: string | null },
+): Promise<StudentDto> {
+  await assertCanAccessClass(classId, userId, role);
+
+  const enrollment = await prisma.enrollment.findUnique({
+    where: {
+      studentId_classId: { studentId, classId },
+    },
+    include: { student: true },
+  });
+  if (!enrollment) {
+    throw new HttpError("Student not found in this class", 404);
+  }
+
+  const updated = await prisma.student.update({
+    where: { id: studentId },
+    data: { parentContact: input.parentContact },
+  });
+
+  return toStudentDto(updated);
 }
 
 function studentSearchWhere(

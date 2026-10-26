@@ -41,3 +41,42 @@ export function defaulterWhatsAppMessage(input: {
     `Please help them complete the pending work. Thank you.`
   );
 }
+
+export type DefaulterGroupLine = {
+  rollNumber: number;
+  name: string;
+  missCount: number;
+};
+
+/**
+ * One message for the class WhatsApp group: short roll list + ask parents
+ * to follow up. Teacher opens wa.me/?text= and picks the group.
+ */
+export function defaultersClassGroupMessage(input: {
+  className?: string;
+  days: number;
+  defaulters: DefaulterGroupLine[];
+}): string {
+  const heading = input.className
+    ? `Defaulters — ${input.className} (last ${input.days} days)`
+    : `Defaulters (last ${input.days} days)`;
+
+  if (input.defaulters.length === 0) {
+    return `${heading}\n\nNo students with 2+ incomplete checks.`;
+  }
+
+  const lines = [...input.defaulters]
+    .sort((a, b) => a.rollNumber - b.rollNumber)
+    .map(
+      (row) =>
+        `#${row.rollNumber} ${row.name} — ${row.missCount} miss${
+          row.missCount === 1 ? "" : "es"
+        }`,
+    );
+
+  return (
+    `${heading}\n\n` +
+    `${lines.join("\n")}\n\n` +
+    `Parents, please help complete pending homework / notebook work. Thank you.`
+  );
+}

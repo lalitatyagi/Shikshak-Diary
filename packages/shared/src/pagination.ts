@@ -25,6 +25,18 @@ export const searchQuerySchema = z
 
 export const studentsListQuerySchema = paginationQuerySchema.extend({
   q: searchQuerySchema,
+  /** When true, only students with no usable parent phone. */
+  missingContact: z
+    .union([
+      z.literal("1"),
+      z.literal("true"),
+      z.literal("0"),
+      z.literal("false"),
+    ])
+    .optional()
+    .transform((value) =>
+      value === undefined ? undefined : value === "1" || value === "true",
+    ),
 });
 
 export const tasksListQuerySchema = paginationQuerySchema.extend({

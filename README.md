@@ -44,14 +44,19 @@ Phone-width captures from the seeded demo class **8-B** (40 students).
 
 ## What it does
 
-- **Sign in / Sign up** — email + password + Indian mobile; SMS OTP before the account is created; school access needs an **admin invite** (`/admin/schools`)
-- **Home dashboard** — per class: today's tasks with pending counts, rolling defaulters, quick links to grid / students / defaulters
+- **Sign in / Sign up** — email + password + Indian mobile; SMS OTP before the account is created; school access needs an **admin** (`/admin/schools`: add teachers, invite, assign to classes, manage all classes)
+- **Admin portal** — create school, add teacher accounts, invite existing users, assign teachers to classes, open any class grid/students/defaulters
+- **Home dashboard** — per class: pending today, week attendance %, homework done %, top defaulters, quick links to grid / students / defaulters
 - **Classes** — **New class** for schools you belong to (demo seed has one school)
 - **CSV roster import** — class teachers import students from a file or paste (per-row errors)
+- **Parent phones** — roster shows who is missing a number; class teachers add/edit inline (needed for WhatsApp)
 - **Tick grid** — students × tasks; tap to cycle status; bulk “mark all done”
 - **Task types** — daily homework, notebook check, weekly test (marks), holiday homework (parts), **attendance** (present / absent / late on the same grid)
 - **Take attendance** — one tap creates today's attendance column; tap cycles P ↔ A
-- **Defaulters** — students with 2+ `NOT_DONE` / `NOT_CHECKED` in the last N Kolkata days; **WhatsApp** parents (per student + copy-all) when `parentContact` is set
+- **Today's HW** — one tap creates today's daily homework (repeats yesterday's title when available); quick title chips in New task
+- **Recurring tasks** — from New task, choose Mon–Fri or every day to create up to a week of columns at once (still one Task per day)
+- **Continue where you left** — home remembers the last class (and grid filters) on this device
+- **Defaulters** — students with 2+ `NOT_DONE` / `NOT_CHECKED` in the last N Kolkata days; **Share to group** (one WhatsApp list) plus per-parent messages when `parentContact` is set
 - **Student report** — per-student summary; parent share link (hashed URL); CSV / print PDF
 - **Offline marks** — PWA caches the last grid; status taps queue and sync on reconnect
 - **RBAC** — class teachers manage roster + parent links; subject teachers mark the grid
@@ -161,7 +166,7 @@ npx playwright install chromium
 | POST | `/auth/refresh` | Rotates tokens using httpOnly `refreshToken` cookie |
 | POST | `/auth/logout` | Revokes the refresh token and clears the cookie |
 | GET | `/auth/me` | Requires `Authorization: Bearer <accessToken>` |
-| GET | `/home` | Teacher home: today's tasks + defaulter counts per class |
+| GET | `/home` | Teacher home: today tasks, week attendance/HW %, top defaulters per class |
 
 ### Classes & students
 
@@ -170,10 +175,14 @@ npx playwright install chromium
 | GET | `/schools` | Schools the caller belongs to (ADMIN: all) |
 | POST | `/schools` | ADMIN creates a school |
 | POST | `/schools/:schoolId/members` | ADMIN invites by email; optional `role`: `TEACHER` \| `CLASS_TEACHER` |
-| GET | `/schools/:schoolId/members` | ADMIN lists school members |
-| GET | `/classes` | Classes assigned to the teacher |
+| GET | `/schools/:schoolId/members` | ADMIN lists school members (+ assigned class names) |
+| POST | `/schools/:schoolId/teachers` | ADMIN creates teacher account + membership (no OTP) |
+| GET | `/schools/:schoolId/classes` | ADMIN lists all classes in a school |
+| POST | `/classes/:classId/assignments` | ADMIN assigns a school teacher to a class |
+| GET | `/classes` | Classes assigned to the teacher (ADMIN: all classes) |
 | POST | `/classes` | Create a class in a school the teacher belongs to |
-| GET | `/classes/:classId/students` | Paginated students (`page`, `pageSize` default 40, optional `q`) |
+| GET | `/classes/:classId/students` | Paginated students (`page`, `pageSize`, `q`, `missingContact=1`) + `missingParentContactCount` |
+| PATCH | `/classes/:classId/students/:studentId` | Class teacher / admin sets `parentContact` (Indian mobile → E.164) |
 | POST | `/classes/:classId/students/import` | CSV import — **CLASS_TEACHER** or **ADMIN** only |
 
 CSV columns: `rollNumber`, `name`, optional `parentContact`. Max 200 rows per
@@ -185,6 +194,8 @@ per-row error (no rename / enroll).
 | Method | Path | Notes |
 | --- | --- | --- |
 | POST | `/classes/:classId/tasks` | Create task + PENDING statuses (transaction) |
+| POST | `/classes/:classId/tasks/today-homework` | Idempotent today's `DAILY_HOMEWORK` (optional `title`, `subjectId`) |
+| POST | `/classes/:classId/tasks/recurring` | Create many tasks by weekday pattern (`fromDate`/`toDate`, max 10) |
 | GET | `/classes/:classId/tasks` | Paginated tasks (`page`, `pageSize`, optional `type`) |
 | GET | `/tasks/:taskId` | Task detail with `statusCount` |
 | GET | `/classes/:classId/grid` | Students × tasks × statuses; filters `type`, `days`, `q` |

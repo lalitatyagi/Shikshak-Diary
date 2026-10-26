@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import {
+  addKolkataCalendarDays,
   kolkataCalendarDateToInstant,
   startOfTodayKolkata,
   toKolkataCalendarDate,
@@ -419,6 +420,128 @@ describe("task routes", () => {
     expect(stored.assignedOn.toISOString()).toBe("2026-10-02T18:30:00.000Z");
     expect(stored.dueOn.toISOString()).toBe("2026-10-02T18:30:00.000Z");
     expect(toKolkataCalendarDate(stored.assignedOn)).toBe("2026-10-03");
+  });
+
+  it("creates recurring weekday tasks and skips duplicates", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks/recurring`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        subjectId,
+        type: "NOTEBOOK_CHECK",
+        title: "Diary check",
+        fromDate: "2026-10-26",
+        toDate: "2026-10-30",
+        weekdays: [1, 2, 3, 4, 5],
+      },
+    });
+    expect(first.statusCode).toBe(201);
+    const created = first.json() as {
+      created: Array<{ assignedOn: string; title: string }>;
+      skippedDates: string[];
+    };
+    expect(created.created).toHaveLength(5);
+    expect(created.created.map((t) => t.assignedOn)).toEqual([
+      "2026-10-26",
+      "2026-10-27",
+      "2026-10-28",
+      "2026-10-29",
+      "2026-10-30",
+    ]);
+    expect(created.skippedDates).toEqual([]);
+
+    const second = await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks/recurring`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        subjectId,
+        type: "NOTEBOOK_CHECK",
+        title: "Diary check",
+        fromDate: "2026-10-26",
+        toDate: "2026-10-30",
+        weekdays: [1, 2, 3, 4, 5],
+      },
+    });
+    expect(second.statusCode).toBe(200);
+    const again = second.json() as {
+      created: unknown[];
+      skippedDates: string[];
+    };
+    expect(again.created).toHaveLength(0);
+    expect(again.skippedDates).toHaveLength(5);
+  });
+
+  it("creates today's homework from the last title and is idempotent", async () => {
+    const today = toKolkataCalendarDate(new Date());
+    const yesterday = addKolkataCalendarDays(today, -1);
+    const todayStart = kolkataCalendarDateToInstant(today);
+    const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    // Other tests in this file may already have created today's homework.
+    await prisma.task.deleteMany({
+      where: {
+        classId,
+        subjectId,
+        type: "DAILY_HOMEWORK",
+        assignedOn: { gte: todayStart, lt: tomorrowStart },
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        subjectId,
+        type: "DAILY_HOMEWORK",
+        title: "Exercise 9.9",
+        assignedOn: yesterday,
+        dueOn: yesterday,
+      },
+    });
+
+    const first = await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks/today-homework`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { subjectId },
+    });
+    expect(first.statusCode).toBe(201);
+    const created = first.json() as {
+      created: boolean;
+      task: { id: string; title: string; type: string; assignedOn: string };
+    };
+    expect(created.created).toBe(true);
+    expect(created.task.type).toBe("DAILY_HOMEWORK");
+    expect(created.task.title).toBe("Exercise 9.9");
+    expect(created.task.assignedOn).toBe(today);
+
+    const second = await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks/today-homework`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { subjectId },
+    });
+    expect(second.statusCode).toBe(200);
+    const again = second.json() as {
+      created: boolean;
+      task: { id: string };
+    };
+    expect(again.created).toBe(false);
+    expect(again.task.id).toBe(created.task.id);
+
+    const custom = await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks/today-homework`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { subjectId, title: "Should not create another" },
+    });
+    expect(custom.statusCode).toBe(200);
+    expect((custom.json() as { task: { id: string } }).task.id).toBe(
+      created.task.id,
+    );
   });
 
   it("gives a student imported during task creation a status row", async () => {

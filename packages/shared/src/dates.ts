@@ -84,3 +84,25 @@ export function isPastDueInKolkata(
 ): boolean {
   return toKolkataCalendarDate(dueOn) < toKolkataCalendarDate(now);
 }
+
+/** ISO weekday in Asia/Kolkata: Monday=1 … Sunday=7. */
+export function kolkataIsoWeekday(dateStr: string): number {
+  const short = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIMEZONE,
+    weekday: "short",
+  }).format(kolkataCalendarDateToInstant(dateStr));
+  const map: Record<string, number> = {
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+    Sun: 7,
+  };
+  const day = map[short];
+  if (day == null) {
+    throw new Error(`Unexpected weekday label: ${short}`);
+  }
+  return day;
+}

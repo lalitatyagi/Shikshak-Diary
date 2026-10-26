@@ -47,21 +47,29 @@ export {
 export {
   createSchoolBodySchema,
   inviteSchoolMemberBodySchema,
+  createTeacherBodySchema,
+  assignTeacherBodySchema,
   createClassBodySchema,
   schoolSchema,
   schoolMemberSchema,
   classSchema,
   studentSchema,
+  updateStudentBodySchema,
+  studentsListResponseSchema,
   csvImportBodySchema,
   csvImportResultSchema,
   csvRowErrorSchema,
   type CreateSchoolBody,
   type InviteSchoolMemberBody,
+  type CreateTeacherBody,
+  type AssignTeacherBody,
   type CreateClassBody,
   type SchoolDto,
   type SchoolMemberDto,
   type ClassDto,
   type StudentDto,
+  type UpdateStudentBody,
+  type StudentsListResponse,
   type CsvImportBody,
   type CsvImportResult,
 } from "./classes.js";
@@ -75,7 +83,19 @@ export {
   addKolkataCalendarDays,
   defaultersWindow,
   isPastDueInKolkata,
+  kolkataIsoWeekday,
 } from "./dates.js";
+export {
+  MAX_RECURRING_TASKS,
+  MAX_RECURRING_SPAN_DAYS,
+  WEEKDAY_SCHOOL_DAYS,
+  ALL_WEEK_DAYS,
+  createRecurringTasksBodySchema,
+  createRecurringTasksResultSchema,
+  expandRecurringDates,
+  type CreateRecurringTasksBody,
+  type CreateRecurringTasksResult,
+} from "./recurring-tasks.js";
 export {
   DEFAULT_DEFAULTERS_DAYS,
   DEFAULT_MIN_MISSES,
@@ -88,9 +108,12 @@ export {
 } from "./defaulters.js";
 export {
   homeTodayTaskSchema,
+  homeTopDefaulterSchema,
   homeClassCardSchema,
   homeResponseSchema,
+  percentOrNull,
   type HomeTodayTask,
+  type HomeTopDefaulter,
   type HomeClassCard,
   type HomeResponse,
 } from "./home.js";
@@ -99,6 +122,8 @@ export {
   whatsappChatHref,
   whatsappShareHref,
   defaulterWhatsAppMessage,
+  defaultersClassGroupMessage,
+  type DefaulterGroupLine,
 } from "./whatsapp.js";
 export {
   DEFAULT_REPORT_DAYS,
@@ -157,6 +182,16 @@ export {
   type CreateTaskBody,
   type TaskDto,
 } from "./tasks.js";
+export {
+  DEFAULT_DAILY_HOMEWORK_TITLE,
+  DAILY_HOMEWORK_TITLE_TEMPLATES,
+  todayHomeworkBodySchema,
+  todayHomeworkResultSchema,
+  suggestDailyHomeworkTitle,
+  findTodaysDailyHomework,
+  type TodayHomeworkBody,
+  type TodayHomeworkResult,
+} from "./task-templates.js";
 export {
   allowedStatusesForType,
   isStatusAllowedForType,

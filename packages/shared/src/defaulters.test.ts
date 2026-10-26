@@ -39,6 +39,7 @@ describe("defaulters schemas", () => {
   it("accepts a valid response shape", () => {
     const parsed = defaultersResponseSchema.parse({
       classId: "c1",
+      className: "8-B",
       days: 7,
       fromDate: "2026-09-27",
       toDate: "2026-10-03",

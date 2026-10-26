@@ -1,21 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   canManageRoster,
   csvImportResultSchema,
-  paginatedResponseSchema,
   studentSchema,
+  studentsListResponseSchema,
+  toWhatsAppDigits,
   type CsvImportResult,
   type StudentDto,
 } from "@classroom-tracker/shared";
 import { ApiError, apiFetch } from "../api";
 import { useAuth } from "../auth";
-
-const studentsPageSchema = paginatedResponseSchema(studentSchema);
+import { writeLastVisited } from "../lastVisited";
 
 const SAMPLE_CSV =
   "rollNumber,name,parentContact\n1,Aarav Sharma,\n2,Ananya Verma,9800000002\n";
+
+function displayPhone(contact: string | null): string {
+  if (!contact) return "No phone";
+  const digits = toWhatsAppDigits(contact);
+  if (!digits) return contact;
+  return `+${digits.slice(0, 2)} ${digits.slice(2)}`;
+}
 
 export function StudentsPage() {
   const { classId = "" } = useParams();
@@ -28,6 +41,9 @@ export function StudentsPage() {
   const [draftQ, setDraftQ] = useState(searchParams.get("q") ?? "");
   const q = searchParams.get("q") ?? "";
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const missingOnly =
+    searchParams.get("missingContact") === "1" ||
+    searchParams.get("missingContact") === "true";
 
   const [showImport, setShowImport] = useState(
     () => searchParams.get("import") === "1",
@@ -36,19 +52,29 @@ export function StudentsPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<CsvImportResult | null>(null);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
   const query = useQuery({
-    queryKey: ["students", classId, q, page],
+    queryKey: ["students", classId, q, page, missingOnly],
     enabled: Boolean(classId),
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page) });
       if (q) params.set("q", q);
-      return studentsPageSchema.parse(
+      if (missingOnly) params.set("missingContact", "1");
+      return studentsListResponseSchema.parse(
         await apiFetch<unknown>(
           `/classes/${classId}/students?${params.toString()}`,
         ),
       );
     },
   });
+
+  useEffect(() => {
+    if (!classId) return;
+    writeLastVisited({ classId, path: "students" });
+  }, [classId]);
 
   const importMutation = useMutation({
     mutationFn: async (csv: string) =>
@@ -77,13 +103,64 @@ export function StudentsPage() {
     },
   });
 
+  const updatePhoneMutation = useMutation({
+    mutationFn: async (input: { studentId: string; parentContact: string }) =>
+      studentSchema.parse(
+        await apiFetch<unknown>(
+          `/classes/${classId}/students/${input.studentId}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ parentContact: input.parentContact }),
+          },
+        ),
+      ),
+    onSuccess: async () => {
+      setEditingId(null);
+      setPhoneDraft("");
+      setPhoneError(null);
+      await queryClient.invalidateQueries({ queryKey: ["students", classId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["defaulters", classId],
+      });
+    },
+    onError: (err) => {
+      setPhoneError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not save parent number.",
+      );
+    },
+  });
+
   function applySearch(event: FormEvent) {
     event.preventDefault();
-    const next = new URLSearchParams();
+    const next = new URLSearchParams(searchParams);
     const trimmed = draftQ.trim();
     if (trimmed) next.set("q", trimmed);
+    else next.delete("q");
     next.set("page", "1");
     setSearchParams(next);
+  }
+
+  function toggleMissingFilter() {
+    const next = new URLSearchParams(searchParams);
+    if (missingOnly) next.delete("missingContact");
+    else next.set("missingContact", "1");
+    next.set("page", "1");
+    setSearchParams(next);
+  }
+
+  function startEdit(student: StudentDto) {
+    setEditingId(student.id);
+    setPhoneDraft(student.parentContact ?? "");
+    setPhoneError(null);
+  }
+
+  function savePhone(studentId: string) {
+    updatePhoneMutation.mutate({
+      studentId,
+      parentContact: phoneDraft.trim(),
+    });
   }
 
   async function onFileChosen(event: ChangeEvent<HTMLInputElement>) {
@@ -122,6 +199,7 @@ export function StudentsPage() {
 
   const emptyList =
     query.data && query.data.items.length === 0 && !query.isPending;
+  const missingCount = query.data?.missingParentContactCount ?? 0;
 
   return (
     <main className="mx-auto min-h-screen max-w-lg px-4 py-6">
@@ -141,9 +219,33 @@ export function StudentsPage() {
           Students
         </h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Open a student for their activity report.
+          Roster and parent phones for WhatsApp.
         </p>
       </header>
+
+      {query.data && missingCount > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-700/20 bg-amber-50 px-4 py-3 text-sm text-[var(--ink)]">
+          <p>
+            <strong>{missingCount}</strong> student
+            {missingCount === 1 ? "" : "s"} missing a parent phone — WhatsApp
+            defaulters needs numbers.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={toggleMissingFilter}
+              className="min-h-10 font-medium text-[var(--accent)] underline"
+            >
+              {missingOnly ? "Show all students" : "Show missing only"}
+            </button>
+            {canImport && (
+              <span className="text-[var(--muted)]">
+                Tap Edit phone on a row to add one.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {canImport && (
         <section className="mb-6">
@@ -282,31 +384,121 @@ export function StudentsPage() {
 
       {emptyList && (
         <p className="rounded-xl bg-[var(--surface)] px-4 py-6 text-[var(--muted)] shadow-sm">
-          {q
-            ? "No students match this search."
-            : canImport
-              ? "No students yet. Import a CSV above to build the roster."
-              : "No students yet. Ask your class teacher to import the roster."}
+          {missingOnly
+            ? "Every student on this page has a parent phone."
+            : q
+              ? "No students match this search."
+              : canImport
+                ? "No students yet. Import a CSV above to build the roster."
+                : "No students yet. Ask your class teacher to import the roster."}
         </p>
       )}
 
       <ul className="space-y-2">
-        {(query.data?.items ?? []).map((student: StudentDto) => (
-          <li key={student.id}>
-            <Link
-              to={`/classes/${classId}/students/${student.id}/report`}
-              className="flex min-h-12 items-center justify-between gap-3 rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm"
+        {(query.data?.items ?? []).map((student: StudentDto) => {
+          const hasPhone = Boolean(toWhatsAppDigits(student.parentContact));
+          const isEditing = editingId === student.id;
+
+          return (
+            <li
+              key={student.id}
+              className="rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm"
             >
-              <span className="text-lg font-medium">
-                <span className="text-[var(--muted)]">
-                  #{student.rollNumber}
-                </span>{" "}
-                {student.name}
-              </span>
-              <span className="text-sm text-[var(--accent)]">Report →</span>
-            </Link>
-          </li>
-        ))}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-lg font-medium">
+                    <span className="text-[var(--muted)]">
+                      #{student.rollNumber}
+                    </span>{" "}
+                    {student.name}
+                  </p>
+                  {!isEditing && (
+                    <p
+                      className={`mt-0.5 text-sm ${
+                        hasPhone ? "text-[var(--muted)]" : "text-amber-800"
+                      }`}
+                    >
+                      {displayPhone(student.parentContact)}
+                    </p>
+                  )}
+                </div>
+                <Link
+                  to={`/classes/${classId}/students/${student.id}/report`}
+                  className="shrink-0 text-sm text-[var(--accent)] underline"
+                >
+                  Report
+                </Link>
+              </div>
+
+              {canImport && isEditing && (
+                <div className="mt-3 space-y-2">
+                  <label className="block text-sm">
+                    <span className="text-[var(--muted)]">Parent mobile</span>
+                    <input
+                      value={phoneDraft}
+                      onChange={(event) => setPhoneDraft(event.target.value)}
+                      placeholder="9876543210"
+                      inputMode="tel"
+                      autoFocus
+                      className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3 text-base"
+                    />
+                  </label>
+                  {phoneError && (
+                    <p className="text-sm text-red-700">{phoneError}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={updatePhoneMutation.isPending}
+                      onClick={() => savePhone(student.id)}
+                      className="min-h-11 flex-1 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white disabled:opacity-60"
+                    >
+                      {updatePhoneMutation.isPending ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatePhoneMutation.isPending}
+                      onClick={() => {
+                        setPhoneDraft("");
+                        updatePhoneMutation.mutate({
+                          studentId: student.id,
+                          parentContact: "",
+                        });
+                      }}
+                      className="min-h-11 rounded-lg border border-[var(--accent)] px-3 text-sm font-medium text-[var(--accent)] disabled:opacity-60"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatePhoneMutation.isPending}
+                      onClick={() => {
+                        setEditingId(null);
+                        setPhoneDraft("");
+                        setPhoneError(null);
+                      }}
+                      className="min-h-11 rounded-lg px-3 text-sm text-[var(--muted)] underline disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {canImport && !isEditing && (
+                <div className="mt-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => startEdit(student)}
+                    className="min-h-10 text-sm font-medium text-[var(--accent)] underline"
+                  >
+                    {hasPhone ? "Edit phone" : "Add phone"}
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       {query.data && query.data.totalPages > 1 && (

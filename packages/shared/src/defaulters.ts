@@ -20,6 +20,8 @@ export const defaulterRowSchema = z.object({
 
 export const defaultersResponseSchema = z.object({
   classId: z.string().min(1),
+  /** Display name for WhatsApp class-group blasts. */
+  className: z.string().min(1),
   days: z.number().int().positive(),
   fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

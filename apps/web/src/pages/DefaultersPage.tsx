@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   DEFAULT_DEFAULTERS_DAYS,
   defaulterWhatsAppMessage,
+  defaultersClassGroupMessage,
   defaultersResponseSchema,
   toWhatsAppDigits,
   whatsappChatHref,
@@ -11,6 +12,7 @@ import {
   type DefaulterRow,
 } from "@classroom-tracker/shared";
 import { apiDownload, apiFetch } from "../api";
+import { writeLastVisited } from "../lastVisited";
 
 const DAY_OPTIONS = [7, 14, 30] as const;
 
@@ -44,6 +46,15 @@ export function DefaultersPage() {
       ),
   });
 
+  useEffect(() => {
+    if (!classId) return;
+    writeLastVisited({
+      classId,
+      className: query.data?.className,
+      path: "defaulters",
+    });
+  }, [classId, query.data?.className]);
+
   const withPhone = useMemo(() => {
     const rows = query.data?.defaulters ?? [];
     return rows
@@ -55,7 +66,37 @@ export function DefaultersPage() {
       .filter((item): item is NonNullable<typeof item> => item != null);
   }, [query.data, days]);
 
-  async function copyAllMessages() {
+  const groupMessage = useMemo(() => {
+    if (!query.data) return "";
+    return defaultersClassGroupMessage({
+      className: query.data.className,
+      days: query.data.days,
+      defaulters: query.data.defaulters.map((row) => ({
+        rollNumber: row.student.rollNumber,
+        name: row.student.name,
+        missCount: row.missCount,
+      })),
+    });
+  }, [query.data]);
+
+  async function copyText(label: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyNote(label);
+    } catch {
+      setCopyNote("Copy failed — use Share to group or WhatsApp per student");
+    }
+  }
+
+  async function copyGroupList() {
+    if (!query.data || query.data.defaulters.length === 0) {
+      setCopyNote("No defaulters to copy.");
+      return;
+    }
+    await copyText("Copied class-group list", groupMessage);
+  }
+
+  async function copyAllParentMessages() {
     if (withPhone.length === 0) {
       setCopyNote("No parent numbers on this list.");
       return;
@@ -66,12 +107,7 @@ export function DefaultersPage() {
           `#${row.student.rollNumber} ${row.student.name}\n${text}`,
       )
       .join("\n\n---\n\n");
-    try {
-      await navigator.clipboard.writeText(blob);
-      setCopyNote(`Copied ${withPhone.length} message(s)`);
-    } catch {
-      setCopyNote("Copy failed — open WhatsApp per student instead");
-    }
+    await copyText(`Copied ${withPhone.length} parent message(s)`, blob);
   }
 
   return (
@@ -141,40 +177,80 @@ export function DefaultersPage() {
       </div>
 
       {query.data && query.data.defaulters.length > 0 && (
-        <div className="no-print mb-4 space-y-2 rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm">
-          <p className="text-sm text-[var(--muted)]">
-            WhatsApp: {withPhone.length} of {query.data.defaulters.length} have
-            a parent number
-            {withPhone.length < query.data.defaulters.length
-              ? " — add parentContact on Students to message the rest"
-              : ""}
-            .
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              disabled={withPhone.length === 0}
-              onClick={() => void copyAllMessages()}
-              className="min-h-11 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)] disabled:opacity-40"
-            >
-              Copy all texts
-            </button>
-            <a
-              href={
-                withPhone[0]
-                  ? whatsappChatHref(withPhone[0].digits, withPhone[0].text)
-                  : whatsappShareHref(
-                      "Please complete pending homework. Thank you.",
-                    )
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`flex min-h-11 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-medium text-white ${
-                withPhone.length === 0 ? "pointer-events-none opacity-40" : ""
-              }`}
-            >
-              Message first
-            </a>
+        <div className="no-print mb-4 space-y-3 rounded-xl bg-[var(--surface)] px-4 py-3 shadow-sm">
+          <div>
+            <p className="text-sm font-medium text-[var(--ink)]">
+              Class WhatsApp group
+            </p>
+            <p className="mt-0.5 text-sm text-[var(--muted)]">
+              One list for the group chat — pick the chat in WhatsApp after
+              tap.
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <a
+                href={whatsappShareHref(groupMessage)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-11 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-medium text-white"
+              >
+                Share to group
+              </a>
+              <button
+                type="button"
+                onClick={() => void copyGroupList()}
+                className="min-h-11 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)]"
+              >
+                Copy group list
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-emerald-900/10 pt-3">
+            <p className="text-sm font-medium text-[var(--ink)]">
+              Individual parents
+            </p>
+            <p className="mt-0.5 text-sm text-[var(--muted)]">
+              {withPhone.length} of {query.data.defaulters.length} have a parent
+              number
+              {withPhone.length < query.data.defaulters.length ? (
+                <>
+                  {" "}
+                  —{" "}
+                  <Link
+                    to={`/classes/${classId}/students?missingContact=1`}
+                    className="font-medium text-[var(--accent)] underline"
+                  >
+                    add missing phones
+                  </Link>
+                </>
+              ) : null}
+              .
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={withPhone.length === 0}
+                onClick={() => void copyAllParentMessages()}
+                className="min-h-11 rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)] disabled:opacity-40"
+              >
+                Copy parent texts
+              </button>
+              <a
+                href={
+                  withPhone[0]
+                    ? whatsappChatHref(withPhone[0].digits, withPhone[0].text)
+                    : undefined
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-disabled={withPhone.length === 0}
+                className={`flex min-h-11 items-center justify-center rounded-lg border border-[var(--accent)] text-sm font-medium text-[var(--accent)] ${
+                  withPhone.length === 0 ? "pointer-events-none opacity-40" : ""
+                }`}
+              >
+                Message first
+              </a>
+            </div>
           </div>
           {copyNote && (
             <p className="text-sm text-[var(--muted)]">{copyNote}</p>

@@ -124,7 +124,37 @@ describe("home routes", () => {
       void task;
     }
 
-    void assignedOn;
+    await prisma.task.create({
+      data: {
+        classId,
+        subjectId,
+        createdById: teacher.id,
+        type: "ATTENDANCE",
+        title: `Attendance ${today}`,
+        assignedOn,
+        dueOn: assignedOn,
+        statuses: {
+          create: students.map((student) => ({
+            studentId: student.id,
+            status: student.rollNumber === 1 ? "ABSENT" : "DONE",
+            updatedById: teacher.id,
+          })),
+        },
+      },
+    });
+
+    // Score today's homework so homeworkDonePct is defined (1 DONE of 2).
+    const todayHw = await prisma.task.findFirstOrThrow({
+      where: { classId, title: "Today HW" },
+    });
+    await prisma.taskStatus.updateMany({
+      where: { taskId: todayHw.id, student: { rollNumber: 2 } },
+      data: { status: "DONE", updatedById: teacher.id },
+    });
+    await prisma.taskStatus.updateMany({
+      where: { taskId: todayHw.id, student: { rollNumber: 1 } },
+      data: { status: "NOT_DONE", updatedById: teacher.id },
+    });
   });
 
   afterAll(async () => {
@@ -160,6 +190,13 @@ describe("home routes", () => {
         todayTasks: Array<{ title: string; pendingCount: number }>;
         pendingTodayCount: number;
         defaulterCount: number;
+        attendancePresentPct: number | null;
+        homeworkDonePct: number | null;
+        topDefaulters: Array<{
+          name: string;
+          rollNumber: number;
+          missCount: number;
+        }>;
       }>;
     };
     expect(body.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -167,8 +204,13 @@ describe("home routes", () => {
     expect(card).toBeTruthy();
     expect(card!.name).toBe("8-H");
     expect(card!.todayTasks.some((t) => t.title === "Today HW")).toBe(true);
-    expect(card!.pendingTodayCount).toBeGreaterThanOrEqual(1);
     expect(card!.defaulterCount).toBe(1);
+    expect(card!.attendancePresentPct).toBe(50);
+    // Older HW (1 DONE of 2 twice) + today HW (1 DONE of 2) → 3/6 = 50%
+    expect(card!.homeworkDonePct).toBe(50);
+    expect(card!.topDefaulters).toEqual([
+      expect.objectContaining({ rollNumber: 1, missCount: 3, name: "One" }),
+    ]);
   });
 
   it("rejects unauthenticated access", async () => {

@@ -1,21 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
+  addKolkataCalendarDays,
+  ALL_WEEK_DAYS,
   classGridSchema,
+  createRecurringTasksResultSchema,
   createTaskBodySchema,
+  DAILY_HOMEWORK_TITLE_TEMPLATES,
+  expandRecurringDates,
   longPressStatuses,
   primaryTapStatus,
+  suggestDailyHomeworkTitle,
   taskSchema,
   taskTypeSchema,
+  todayHomeworkResultSchema,
   toKolkataCalendarDate,
+  WEEKDAY_SCHOOL_DAYS,
   type ClassGridDto,
   type StatusValue,
   type TaskStatusDto,
   type TaskType,
 } from "@classroom-tracker/shared";
+
+type RepeatPattern = "once" | "weekdays" | "daily";
 import { ApiError, apiFetch } from "../api";
 import { notifyOutboxChanged } from "../components/OfflineBanner";
+import { readLastVisited, writeLastVisited } from "../lastVisited";
 import {
   cacheClassGrid,
   enqueueStatusOutbox,
@@ -151,6 +162,8 @@ export function TickGridPage() {
   const [newDueOn, setNewDueOn] = useState(() =>
     toKolkataCalendarDate(new Date()),
   );
+  const [repeatPattern, setRepeatPattern] = useState<RepeatPattern>("once");
+  const [repeatNote, setRepeatNote] = useState<string | null>(null);
   const [menu, setMenu] = useState<{
     statusId: string;
     taskType: TaskType;
@@ -197,6 +210,37 @@ export function TickGridPage() {
       }
     },
   });
+
+  const restoredFiltersRef = useRef(false);
+  useEffect(() => {
+    if (!classId || restoredFiltersRef.current) return;
+    restoredFiltersRef.current = true;
+    if (searchParams.has("type") || searchParams.has("days")) return;
+    const last = readLastVisited();
+    if (!last || last.classId !== classId || last.path !== "grid") return;
+    const next = new URLSearchParams(searchParams);
+    let changed = false;
+    if (last.type) {
+      next.set("type", last.type);
+      changed = true;
+    }
+    if (last.days != null) {
+      next.set("days", String(last.days));
+      changed = true;
+    }
+    if (changed) setSearchParams(next, { replace: true });
+  }, [classId, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!classId) return;
+    writeLastVisited({
+      classId,
+      className: gridQuery.data?.class.name,
+      path: "grid",
+      type: typeFilter,
+      days: daysFilter,
+    });
+  }, [classId, typeFilter, daysFilter, gridQuery.data?.class.name]);
 
   function patchFilters(patch: Record<string, string | undefined>) {
     const next = new URLSearchParams(searchParams);
@@ -333,6 +377,54 @@ export function TickGridPage() {
     onSuccess: async () => {
       setShowNewTask(false);
       setNewTitle("");
+      setRepeatPattern("once");
+      setRepeatNote(null);
+      await queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+
+  const createRecurringMutation = useMutation({
+    mutationFn: async () => {
+      const grid = queryClient.getQueryData<ClassGridDto>(queryKey);
+      if (!grid) {
+        throw new Error("Grid not loaded");
+      }
+      const toDate = addKolkataCalendarDays(newDueOn, 6);
+      const weekdays =
+        repeatPattern === "daily"
+          ? [...ALL_WEEK_DAYS]
+          : [...WEEKDAY_SCHOOL_DAYS];
+      return createRecurringTasksResultSchema.parse(
+        await apiFetch(`/classes/${classId}/tasks/recurring`, {
+          method: "POST",
+          body: JSON.stringify({
+            subjectId: grid.defaultSubjectId,
+            type: newType,
+            title: newTitle.trim(),
+            fromDate: newDueOn,
+            toDate,
+            weekdays,
+            maxMarks:
+              newType === "WEEKLY_TEST" ? Number(newMaxMarks) : undefined,
+            totalParts:
+              newType === "HOLIDAY_HOMEWORK"
+                ? Number(newTotalParts)
+                : undefined,
+          }),
+        }),
+      );
+    },
+    onSuccess: async (result) => {
+      setShowNewTask(false);
+      setNewTitle("");
+      setRepeatPattern("once");
+      setRepeatNote(
+        `Created ${result.created.length}` +
+          (result.skippedDates.length > 0
+            ? ` · skipped ${result.skippedDates.length} existing`
+            : ""),
+      );
       await queryClient.invalidateQueries({ queryKey });
       void queryClient.invalidateQueries({ queryKey: ["home"] });
     },
@@ -374,6 +466,40 @@ export function TickGridPage() {
     },
   });
 
+  const todayHomeworkMutation = useMutation({
+    mutationFn: async (title?: string) => {
+      const grid = queryClient.getQueryData<ClassGridDto>(queryKey);
+      return todayHomeworkResultSchema.parse(
+        await apiFetch(`/classes/${classId}/tasks/today-homework`, {
+          method: "POST",
+          body: JSON.stringify({
+            ...(title ? { title } : {}),
+            ...(grid?.defaultSubjectId
+              ? { subjectId: grid.defaultSubjectId }
+              : {}),
+          }),
+        }),
+      );
+    },
+    onSuccess: async () => {
+      patchFilters({ type: "DAILY_HOMEWORK" });
+      await queryClient.invalidateQueries({
+        queryKey: ["grid", classId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["home"] });
+    },
+  });
+
+  function openNewTaskForm() {
+    const today = toKolkataCalendarDate(new Date());
+    const suggested = suggestDailyHomeworkTitle(grid?.tasks ?? [], today);
+    setNewType("DAILY_HOMEWORK");
+    setNewTitle(suggested);
+    setNewDueOn(today);
+    setRepeatPattern("once");
+    setShowNewTask((open) => !open);
+  }
+
   const bulkMutation = useMutation({
     mutationFn: async (taskId: string) =>
       apiFetch(`/tasks/${taskId}/mark-all-complete`, { method: "POST" }),
@@ -401,8 +527,26 @@ export function TickGridPage() {
 
   function onCreateTask(event: FormEvent) {
     event.preventDefault();
-    createTaskMutation.mutate();
+    if (repeatPattern === "once") {
+      createTaskMutation.mutate();
+      return;
+    }
+    createRecurringMutation.mutate();
   }
+
+  const recurringPreviewCount =
+    repeatPattern === "once"
+      ? 1
+      : expandRecurringDates(
+          newDueOn,
+          addKolkataCalendarDays(newDueOn, 6),
+          repeatPattern === "daily"
+            ? [...ALL_WEEK_DAYS]
+            : [...WEEKDAY_SCHOOL_DAYS],
+        ).length;
+
+  const createPending =
+    createTaskMutation.isPending || createRecurringMutation.isPending;
 
   function undoLastMark() {
     if (!undoSnapshot) return;
@@ -454,7 +598,15 @@ export function TickGridPage() {
           </button>
           <button
             type="button"
-            onClick={() => setShowNewTask((open) => !open)}
+            disabled={todayHomeworkMutation.isPending || !grid}
+            onClick={() => todayHomeworkMutation.mutate(undefined)}
+            className="min-h-11 rounded-lg border border-[var(--accent)] px-3 text-sm font-medium text-[var(--accent)] disabled:opacity-40"
+          >
+            {todayHomeworkMutation.isPending ? "HW…" : "Today's HW"}
+          </button>
+          <button
+            type="button"
+            onClick={openNewTaskForm}
             className="min-h-11 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white"
           >
             + New task
@@ -533,6 +685,41 @@ export function TickGridPage() {
           onSubmit={onCreateTask}
           className="mb-4 space-y-3 rounded-xl bg-[var(--surface)] p-4 shadow-sm"
         >
+          <div>
+            <p className="text-sm text-[var(--muted)]">Quick titles</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {DAILY_HOMEWORK_TITLE_TEMPLATES.map((template) => (
+                <button
+                  key={template}
+                  type="button"
+                  onClick={() => {
+                    setNewType("DAILY_HOMEWORK");
+                    setNewTitle(template);
+                  }}
+                  className={`min-h-10 rounded-lg px-3 text-sm font-medium ${
+                    newType === "DAILY_HOMEWORK" && newTitle === template
+                      ? "bg-[var(--accent)] text-white"
+                      : "border border-[var(--accent)] text-[var(--accent)]"
+                  }`}
+                >
+                  {template}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={todayHomeworkMutation.isPending}
+                onClick={() => {
+                  todayHomeworkMutation.mutate(
+                    newTitle.trim() || undefined,
+                  );
+                  setShowNewTask(false);
+                }}
+                className="min-h-10 rounded-lg bg-emerald-800 px-3 text-sm font-medium text-white disabled:opacity-60"
+              >
+                Create today’s HW
+              </button>
+            </div>
+          </div>
           <label className="block text-sm">
             <span className="text-[var(--muted)]">Title</span>
             <input
@@ -586,7 +773,9 @@ export function TickGridPage() {
             </label>
           )}
           <label className="block text-sm">
-            <span className="text-[var(--muted)]">Due date</span>
+            <span className="text-[var(--muted)]">
+              {repeatPattern === "once" ? "Due date" : "Start date"}
+            </span>
             <input
               type="date"
               className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3"
@@ -595,17 +784,67 @@ export function TickGridPage() {
               required
             />
           </label>
-          {createTaskMutation.isError && (
-            <p className="text-sm text-red-700">Could not create task.</p>
+          <fieldset>
+            <legend className="text-sm text-[var(--muted)]">Repeat</legend>
+            <div className="mt-1 grid grid-cols-3 gap-2">
+              {(
+                [
+                  { value: "once", label: "Once" },
+                  { value: "weekdays", label: "Mon–Fri" },
+                  { value: "daily", label: "Every day" },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setRepeatPattern(option.value)}
+                  className={`min-h-11 rounded-lg text-sm font-medium ${
+                    repeatPattern === option.value
+                      ? "bg-[var(--accent)] text-white"
+                      : "border border-[var(--accent)] text-[var(--accent)]"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            {repeatPattern !== "once" && (
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                Creates {recurringPreviewCount} task
+                {recurringPreviewCount === 1 ? "" : "s"} from {newDueOn} (next 7
+                calendar days, matching days only).
+              </p>
+            )}
+          </fieldset>
+          {(createTaskMutation.isError || createRecurringMutation.isError) && (
+            <p className="text-sm text-red-700">
+              {(createTaskMutation.error instanceof ApiError
+                ? createTaskMutation.error.message
+                : null) ||
+                (createRecurringMutation.error instanceof ApiError
+                  ? createRecurringMutation.error.message
+                  : null) ||
+                "Could not create task."}
+            </p>
           )}
           <button
             type="submit"
-            disabled={createTaskMutation.isPending || !newTitle.trim()}
+            disabled={createPending || !newTitle.trim()}
             className="min-h-12 w-full rounded-lg bg-[var(--accent)] text-white disabled:opacity-60"
           >
-            {createTaskMutation.isPending ? "Creating…" : "Create task"}
+            {createPending
+              ? "Creating…"
+              : repeatPattern === "once"
+                ? "Create task"
+                : `Create ${recurringPreviewCount} tasks`}
           </button>
         </form>
+      )}
+
+      {repeatNote && (
+        <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-[var(--ink)]">
+          {repeatNote}
+        </p>
       )}
 
       {saveError && (
@@ -624,9 +863,21 @@ export function TickGridPage() {
         <p className="px-1 text-red-700">Could not load the grid.</p>
       )}
 
+      {todayHomeworkMutation.isError && (
+        <p
+          role="alert"
+          className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
+          {todayHomeworkMutation.error instanceof ApiError
+            ? todayHomeworkMutation.error.message
+            : "Could not create today's homework."}
+        </p>
+      )}
+
       {grid && grid.tasks.length === 0 && (
         <p className="px-1 text-[var(--muted)]">
-          No tasks yet. Tap “+ New task” to add homework, a test, or a check.
+          No tasks yet. Tap “Today&apos;s HW” for one-tap homework, or “+ New
+          task” for a test or check.
         </p>
       )}
 

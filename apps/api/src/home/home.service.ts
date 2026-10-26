@@ -5,6 +5,7 @@ import {
   defaultersWindow,
   homeResponseSchema,
   kolkataCalendarDateToInstant,
+  percentOrNull,
   toKolkataCalendarDate,
   type HomeResponse,
   type Role,
@@ -19,6 +20,22 @@ type RawDefaulterCount = {
   defaulterCount: number;
 };
 
+type RawTopDefaulter = {
+  classId: string;
+  studentId: string;
+  name: string;
+  rollNumber: number;
+  missCount: number;
+};
+
+type RawWeekRates = {
+  classId: string;
+  attendancePresent: number;
+  attendanceMarked: number;
+  homeworkDone: number;
+  homeworkScored: number;
+};
+
 type TaskWithCounts = {
   id: string;
   classId: string;
@@ -30,7 +47,7 @@ type TaskWithCounts = {
 
 /**
  * One round-trip home payload: classes the teacher can access, today's
- * assigned tasks with pending counts, and rolling defaulter counts.
+ * assigned tasks with pending counts, week rates, and rolling defaulters.
  */
 export async function getTeacherHome(
   userId: string,
@@ -59,8 +76,9 @@ export async function getTeacherHome(
     addKolkataCalendarDays(toDate, 1),
   );
 
-  const [tasks, defaulterRows] = await Promise.all([
-    prisma.$queryRaw<TaskWithCounts[]>(Prisma.sql`
+  const [tasks, defaulterRows, topDefaulterRows, weekRateRows] =
+    await Promise.all([
+      prisma.$queryRaw<TaskWithCounts[]>(Prisma.sql`
       SELECT
         t.id,
         t."classId",
@@ -76,7 +94,7 @@ export async function getTeacherHome(
       GROUP BY t.id, t."classId", t.title, t.type, t."assignedOn", t."createdAt"
       ORDER BY t."assignedOn" DESC, t."createdAt" DESC
     `),
-    prisma.$queryRaw<RawDefaulterCount[]>(Prisma.sql`
+      prisma.$queryRaw<RawDefaulterCount[]>(Prisma.sql`
       SELECT
         misses."classId",
         COUNT(*)::int AS "defaulterCount"
@@ -96,11 +114,75 @@ export async function getTeacherHome(
       ) AS misses
       GROUP BY misses."classId"
     `),
-  ]);
+      prisma.$queryRaw<RawTopDefaulter[]>(Prisma.sql`
+      SELECT
+        ranked."classId",
+        ranked."studentId",
+        ranked.name,
+        ranked."rollNumber",
+        ranked."missCount"
+      FROM (
+        SELECT
+          t."classId",
+          s.id AS "studentId",
+          s.name,
+          s."rollNumber",
+          COUNT(*)::int AS "missCount",
+          ROW_NUMBER() OVER (
+            PARTITION BY t."classId"
+            ORDER BY COUNT(*) DESC, s."rollNumber" ASC
+          ) AS rn
+        FROM "TaskStatus" ts
+        INNER JOIN "Task" t ON t.id = ts."taskId"
+        INNER JOIN "Student" s ON s.id = ts."studentId"
+        WHERE t."classId" IN (${Prisma.join(classIds)})
+          AND ts.status IN ('NOT_DONE', 'NOT_CHECKED')
+          AND t."assignedOn" >= ${fromInstant}
+          AND t."assignedOn" < ${toExclusive}
+        GROUP BY t."classId", s.id, s.name, s."rollNumber"
+        HAVING COUNT(*) >= ${DEFAULT_MIN_MISSES}
+      ) AS ranked
+      WHERE ranked.rn <= 3
+      ORDER BY ranked."classId", ranked.rn
+    `),
+      prisma.$queryRaw<RawWeekRates[]>(Prisma.sql`
+      SELECT
+        t."classId",
+        COUNT(*) FILTER (
+          WHERE t.type = 'ATTENDANCE' AND ts.status = 'DONE'
+        )::int AS "attendancePresent",
+        COUNT(*) FILTER (
+          WHERE t.type = 'ATTENDANCE'
+            AND ts.status IN ('DONE', 'ABSENT', 'INCOMPLETE')
+        )::int AS "attendanceMarked",
+        COUNT(*) FILTER (
+          WHERE t.type = 'DAILY_HOMEWORK' AND ts.status = 'DONE'
+        )::int AS "homeworkDone",
+        COUNT(*) FILTER (
+          WHERE t.type = 'DAILY_HOMEWORK'
+            AND ts.status IN ('DONE', 'NOT_DONE', 'INCOMPLETE')
+        )::int AS "homeworkScored"
+      FROM "Task" t
+      INNER JOIN "TaskStatus" ts ON ts."taskId" = t.id
+      WHERE t."classId" IN (${Prisma.join(classIds)})
+        AND t."assignedOn" >= ${fromInstant}
+        AND t."assignedOn" < ${toExclusive}
+      GROUP BY t."classId"
+    `),
+    ]);
 
   const defaultersByClass = new Map(
     defaulterRows.map((row) => [row.classId, row.defaulterCount]),
   );
+  const weekRatesByClass = new Map(
+    weekRateRows.map((row) => [row.classId, row]),
+  );
+  const topByClass = new Map<string, RawTopDefaulter[]>();
+  for (const row of topDefaulterRows) {
+    const list = topByClass.get(row.classId) ?? [];
+    list.push(row);
+    topByClass.set(row.classId, list);
+  }
   const tasksByClass = new Map<string, TaskWithCounts[]>();
   for (const task of tasks) {
     const list = tasksByClass.get(task.classId) ?? [];
@@ -119,6 +201,7 @@ export async function getTeacherHome(
         total: task.total,
         pendingCount: task.pendingCount,
       }));
+      const rates = weekRatesByClass.get(classroom.id);
       return {
         id: classroom.id,
         schoolId: classroom.schoolId,
@@ -131,6 +214,20 @@ export async function getTeacherHome(
           0,
         ),
         defaulterCount: defaultersByClass.get(classroom.id) ?? 0,
+        attendancePresentPct: percentOrNull(
+          rates?.attendancePresent ?? 0,
+          rates?.attendanceMarked ?? 0,
+        ),
+        homeworkDonePct: percentOrNull(
+          rates?.homeworkDone ?? 0,
+          rates?.homeworkScored ?? 0,
+        ),
+        topDefaulters: (topByClass.get(classroom.id) ?? []).map((row) => ({
+          studentId: row.studentId,
+          name: row.name,
+          rollNumber: row.rollNumber,
+          missCount: row.missCount,
+        })),
       };
     }),
   });

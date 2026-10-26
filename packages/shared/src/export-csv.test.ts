@@ -214,6 +214,7 @@ describe("defaultersToCsv", () => {
   it("uses plain headers and joins task titles", () => {
     const csv = defaultersToCsv({
       classId: "c1",
+      className: "8-B",
       days: 7,
       fromDate: "2026-10-04",
       toDate: "2026-10-10",
@@ -237,6 +238,7 @@ describe("defaultersToCsv", () => {
     expect(
       defaultersCsvFilename({
         classId: "c1",
+        className: "8-B",
         days: 7,
         fromDate: "2026-10-04",
         toDate: "2026-10-10",

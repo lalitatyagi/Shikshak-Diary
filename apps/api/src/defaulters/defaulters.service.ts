@@ -33,7 +33,7 @@ export async function listDefaulters(
   days: number,
   now: Date = new Date(),
 ): Promise<DefaultersResponse> {
-  await assertCanAccessClass(classId, userId, role);
+  const classroom = await assertCanAccessClass(classId, userId, role);
 
   const { fromDate, toDate } = defaultersWindow(days, now);
   const fromInstant = kolkataCalendarDateToInstant(fromDate);
@@ -66,6 +66,7 @@ export async function listDefaulters(
 
   return defaultersResponseSchema.parse({
     classId,
+    className: classroom.name,
     days,
     fromDate,
     toDate,

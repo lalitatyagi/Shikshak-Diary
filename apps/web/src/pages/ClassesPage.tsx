@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   canManageSchool,
@@ -13,6 +13,11 @@ import {
 import { z } from "zod";
 import { ApiError, apiFetch } from "../api";
 import { useAuth } from "../auth";
+import {
+  lastVisitedHref,
+  readLastVisited,
+  type LastVisited,
+} from "../lastVisited";
 
 const schoolsSchema = z.array(schoolSchema);
 
@@ -42,6 +47,18 @@ export function ClassesPage() {
   const schools = schoolsQuery.data ?? [];
   const home = homeQuery.data;
   const classes = home?.classes ?? [];
+
+  const continueVisit = useMemo((): LastVisited | null => {
+    const last = readLastVisited();
+    if (!last || classes.length === 0) return null;
+    const stillAssigned = classes.some((c) => c.id === last.classId);
+    return stillAssigned ? last : null;
+  }, [classes]);
+
+  const continueClassName =
+    continueVisit?.className ??
+    classes.find((c) => c.id === continueVisit?.classId)?.name ??
+    "class";
 
   useEffect(() => {
     if (schools.length === 1 && !schoolId) {
@@ -91,9 +108,12 @@ export function ClassesPage() {
     <main className="mx-auto min-h-screen max-w-lg px-4 py-6">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--accent)]">Today</h1>
+          <h1 className="text-2xl font-semibold text-[var(--accent)]">
+            {user && canManageSchool(user.role) ? "All classes" : "Today"}
+          </h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             {user?.name}
+            {user && canManageSchool(user.role) ? " · Admin" : ""}
             {home?.today ? ` · ${home.today}` : ""}
           </p>
         </div>
@@ -101,7 +121,7 @@ export function ClassesPage() {
           {user && canManageSchool(user.role) && (
             <Link
               to="/admin/schools"
-              className="min-h-11 text-sm font-medium text-[var(--accent)] underline"
+              className="flex min-h-11 items-center rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white"
             >
               School admin
             </Link>
@@ -123,6 +143,30 @@ export function ClassesPage() {
         <p className="mt-8 text-red-700">Could not load home.</p>
       )}
 
+      {continueVisit && (
+        <Link
+          to={lastVisitedHref(continueVisit)}
+          className="mt-6 flex min-h-12 items-center justify-between gap-3 rounded-xl bg-[var(--accent)] px-4 py-3 text-white shadow-sm"
+        >
+          <span className="min-w-0">
+            <span className="block text-xs font-medium uppercase tracking-wide text-white/80">
+              Continue
+            </span>
+            <span className="block truncate text-base font-semibold">
+              {continueClassName}
+              {continueVisit.path === "grid" && continueVisit.type
+                ? ` · ${friendlyTaskType(continueVisit.type)}`
+                : continueVisit.path === "students"
+                  ? " · Students"
+                  : continueVisit.path === "defaulters"
+                    ? " · Defaulters"
+                    : " · Tick grid"}
+            </span>
+          </span>
+          <span className="shrink-0 text-sm font-medium">Open →</span>
+        </Link>
+      )}
+
       <ul className="mt-6 space-y-4">
         {classes.map((classroom: HomeClassCard) => (
           <li
@@ -138,11 +182,31 @@ export function ClassesPage() {
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-lg bg-[var(--ink)]/5 px-3 py-2">
                 <p className="text-xs text-[var(--muted)]">Pending today</p>
                 <p className="text-xl font-semibold text-[var(--ink)]">
                   {classroom.pendingTodayCount}
+                </p>
+              </div>
+              <div className="rounded-lg bg-[var(--ink)]/5 px-3 py-2">
+                <p className="text-xs text-[var(--muted)]">
+                  Present ({home?.defaultersDays ?? 7}d)
+                </p>
+                <p className="text-xl font-semibold text-[var(--ink)]">
+                  {classroom.attendancePresentPct == null
+                    ? "—"
+                    : `${classroom.attendancePresentPct}%`}
+                </p>
+              </div>
+              <div className="rounded-lg bg-[var(--ink)]/5 px-3 py-2">
+                <p className="text-xs text-[var(--muted)]">
+                  HW done ({home?.defaultersDays ?? 7}d)
+                </p>
+                <p className="text-xl font-semibold text-[var(--ink)]">
+                  {classroom.homeworkDonePct == null
+                    ? "—"
+                    : `${classroom.homeworkDonePct}%`}
                 </p>
               </div>
               <div className="rounded-lg bg-[var(--ink)]/5 px-3 py-2">
@@ -154,6 +218,34 @@ export function ClassesPage() {
                 </p>
               </div>
             </div>
+
+            {classroom.topDefaulters.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                  Needs follow-up
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {classroom.topDefaulters.map((student) => (
+                    <li key={student.studentId}>
+                      <Link
+                        to={`/classes/${classroom.id}/students/${student.studentId}/report`}
+                        className="flex min-h-10 items-center justify-between gap-2 text-sm"
+                      >
+                        <span className="min-w-0 truncate">
+                          <span className="text-[var(--muted)]">
+                            #{student.rollNumber}
+                          </span>{" "}
+                          {student.name}
+                        </span>
+                        <span className="shrink-0 rounded bg-red-700 px-1.5 py-0.5 text-xs font-semibold text-white">
+                          {student.missCount}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {classroom.todayTasks.length > 0 ? (
               <ul className="mt-3 space-y-1.5">

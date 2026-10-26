@@ -82,6 +82,7 @@ describe("StudentsPage CSV import", () => {
         pageSize: 40,
         total: 0,
         totalPages: 0,
+        missingParentContactCount: 0,
       };
     });
   });

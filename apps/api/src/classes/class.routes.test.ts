@@ -179,6 +179,44 @@ describe("class routes", () => {
     });
     expect(filtered.statusCode).toBe(200);
     expect((filtered.json() as { total: number }).total).toBe(1);
+
+    const listed = students.json() as {
+      missingParentContactCount: number;
+      items: Array<{ id: string; rollNumber: number; parentContact: string | null }>;
+    };
+    expect(listed.missingParentContactCount).toBeGreaterThanOrEqual(1);
+
+    const withoutPhone = listed.items.find((s) => !s.parentContact);
+    expect(withoutPhone).toBeTruthy();
+
+    const patched = await app.inject({
+      method: "PATCH",
+      url: `/classes/${classId}/students/${withoutPhone!.id}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { parentContact: "9876543210" },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json()).toMatchObject({
+      id: withoutPhone!.id,
+      parentContact: "+919876543210",
+    });
+
+    const missingOnly = await app.inject({
+      method: "GET",
+      url: `/classes/${classId}/students?missingContact=1`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(missingOnly.statusCode).toBe(200);
+    const missingBody = missingOnly.json() as {
+      items: Array<{ id: string }>;
+      missingParentContactCount: number;
+    };
+    expect(
+      missingBody.items.every((s) => s.id !== withoutPhone!.id),
+    ).toBe(true);
+    expect(missingBody.missingParentContactCount).toBe(
+      listed.missingParentContactCount - 1,
+    );
   });
 
   it("forbids another teacher from viewing or importing an unassigned class", async () => {
@@ -440,6 +478,74 @@ describe("class routes", () => {
     });
     expect(students).toHaveLength(1);
     expect(["From A", "From B"]).toContain(students[0]?.name);
+  });
+
+  it("lets an admin create a teacher, list classes, and assign them", async () => {
+    const adminEmail = uniqueEmail("create-admin");
+    emails.push(adminEmail);
+
+    await prisma.user.create({
+      data: {
+        name: "Create Admin",
+        email: adminEmail,
+        passwordHash: await hashPassword("Password123!"),
+        role: Role.ADMIN,
+      },
+    });
+
+    const adminLogin = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: adminEmail, password: "Password123!" },
+    });
+    const adminToken = (adminLogin.json() as { accessToken: string })
+      .accessToken;
+
+    const teacherEmail = uniqueEmail("created-teacher");
+    const created = await app.inject({
+      method: "POST",
+      url: `/schools/${schoolId}/teachers`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        name: "New Hire",
+        email: teacherEmail,
+        password: "Password123!",
+        role: "TEACHER",
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const member = created.json() as { userId: string; email: string };
+    expect(member.email).toBe(teacherEmail.toLowerCase());
+    emails.push(teacherEmail);
+
+    const classList = await app.inject({
+      method: "GET",
+      url: `/schools/${schoolId}/classes`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(classList.statusCode).toBe(200);
+    const classes = classList.json() as Array<{ id: string }>;
+    expect(classes.length).toBeGreaterThan(0);
+
+    const assign = await app.inject({
+      method: "POST",
+      url: `/classes/${classes[0]!.id}/assignments`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { teacherId: member.userId, subjectName: "English" },
+    });
+    expect(assign.statusCode).toBe(201);
+
+    const members = await app.inject({
+      method: "GET",
+      url: `/schools/${schoolId}/members`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    const listed = members.json() as Array<{
+      userId: string;
+      classNames: string[];
+    }>;
+    const hired = listed.find((m) => m.userId === member.userId);
+    expect(hired?.classNames.length).toBeGreaterThan(0);
   });
 
   it("lets an admin invite a registered teacher and list members", async () => {
