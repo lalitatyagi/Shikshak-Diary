@@ -182,7 +182,11 @@ describe("class routes", () => {
 
     const listed = students.json() as {
       missingParentContactCount: number;
-      items: Array<{ id: string; rollNumber: number; parentContact: string | null }>;
+      items: Array<{
+        id: string;
+        rollNumber: number;
+        parentContact: string | null;
+      }>;
     };
     expect(listed.missingParentContactCount).toBeGreaterThanOrEqual(1);
 
@@ -211,9 +215,9 @@ describe("class routes", () => {
       items: Array<{ id: string }>;
       missingParentContactCount: number;
     };
-    expect(
-      missingBody.items.every((s) => s.id !== withoutPhone!.id),
-    ).toBe(true);
+    expect(missingBody.items.every((s) => s.id !== withoutPhone!.id)).toBe(
+      true,
+    );
     expect(missingBody.missingParentContactCount).toBe(
       listed.missingParentContactCount - 1,
     );
@@ -597,9 +601,7 @@ describe("class routes", () => {
     });
     expect(members.statusCode).toBe(200);
     const list = members.json() as Array<{ email: string }>;
-    expect(list.some((m) => m.email === inviteeEmail.toLowerCase())).toBe(
-      true,
-    );
+    expect(list.some((m) => m.email === inviteeEmail.toLowerCase())).toBe(true);
 
     const forbidden = await app.inject({
       method: "GET",

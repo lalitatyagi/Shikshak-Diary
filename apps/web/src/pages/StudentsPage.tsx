@@ -125,9 +125,7 @@ export function StudentsPage() {
     },
     onError: (err) => {
       setPhoneError(
-        err instanceof ApiError
-          ? err.message
-          : "Could not save parent number.",
+        err instanceof ApiError ? err.message : "Could not save parent number.",
       );
     },
   });

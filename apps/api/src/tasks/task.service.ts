@@ -349,9 +349,7 @@ export async function createTodaysDailyHomework(
   );
   const today = toKolkataCalendarDate(now);
   const todayStart = kolkataCalendarDateToInstant(today);
-  const tomorrowStart = new Date(
-    todayStart.getTime() + 24 * 60 * 60 * 1000,
-  );
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
   const existing = await prisma.task.findFirst({
     where: {

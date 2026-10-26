@@ -219,8 +219,7 @@ export function parseStudentCsv(csvText: string): CsvParseResult {
 
     const rollRaw = (line[rollIdx] ?? "").trim();
     const nameRaw = (line[nameIdx] ?? "").trim();
-    const contactRaw =
-      contactIdx >= 0 ? (line[contactIdx] ?? "").trim() : "";
+    const contactRaw = contactIdx >= 0 ? (line[contactIdx] ?? "").trim() : "";
 
     const rowErrors: string[] = [];
 

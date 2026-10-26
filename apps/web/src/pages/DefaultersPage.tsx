@@ -183,8 +183,7 @@ export function DefaultersPage() {
               Class WhatsApp group
             </p>
             <p className="mt-0.5 text-sm text-[var(--muted)]">
-              One list for the group chat — pick the chat in WhatsApp after
-              tap.
+              One list for the group chat — pick the chat in WhatsApp after tap.
             </p>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <a

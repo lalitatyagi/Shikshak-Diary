@@ -709,9 +709,7 @@ export function TickGridPage() {
                 type="button"
                 disabled={todayHomeworkMutation.isPending}
                 onClick={() => {
-                  todayHomeworkMutation.mutate(
-                    newTitle.trim() || undefined,
-                  );
+                  todayHomeworkMutation.mutate(newTitle.trim() || undefined);
                   setShowNewTask(false);
                 }}
                 className="min-h-10 rounded-lg bg-emerald-800 px-3 text-sm font-medium text-white disabled:opacity-60"

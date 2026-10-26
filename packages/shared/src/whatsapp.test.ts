@@ -58,16 +58,14 @@ describe("defaultersClassGroupMessage", () => {
   });
 
   it("handles an empty list", () => {
-    expect(
-      defaultersClassGroupMessage({ days: 14, defaulters: [] }),
-    ).toMatch(/No students/);
+    expect(defaultersClassGroupMessage({ days: 14, defaulters: [] })).toMatch(
+      /No students/,
+    );
   });
 });
 
 describe("whatsappShareHref", () => {
   it("opens the share sheet without a phone", () => {
-    expect(whatsappShareHref("Hello")).toBe(
-      "https://wa.me/?text=Hello",
-    );
+    expect(whatsappShareHref("Hello")).toBe("https://wa.me/?text=Hello");
   });
 });

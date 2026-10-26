@@ -19,7 +19,9 @@ describe("kolkataIsoWeekday", () => {
 describe("expandRecurringDates", () => {
   it("returns Mon–Fri only inside a week", () => {
     expect(
-      expandRecurringDates("2026-10-26", "2026-11-01", [...WEEKDAY_SCHOOL_DAYS]),
+      expandRecurringDates("2026-10-26", "2026-11-01", [
+        ...WEEKDAY_SCHOOL_DAYS,
+      ]),
     ).toEqual([
       "2026-10-26",
       "2026-10-27",

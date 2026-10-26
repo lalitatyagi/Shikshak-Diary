@@ -48,7 +48,11 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
         );
         const body = createRecurringTasksResultSchema.parse(result);
         const status =
-          body.created.length > 0 ? 201 : body.skippedDates.length > 0 ? 200 : 400;
+          body.created.length > 0
+            ? 201
+            : body.skippedDates.length > 0
+              ? 200
+              : 400;
         return reply.status(status).send(body);
       } catch (error) {
         return sendHttpError(reply, error);

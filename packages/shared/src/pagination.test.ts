@@ -23,9 +23,9 @@ describe("studentsListQuerySchema", () => {
   });
 
   it("parses missingContact flag", () => {
-    expect(studentsListQuerySchema.parse({ missingContact: "1" }).missingContact).toBe(
-      true,
-    );
+    expect(
+      studentsListQuerySchema.parse({ missingContact: "1" }).missingContact,
+    ).toBe(true);
     expect(
       studentsListQuerySchema.parse({ missingContact: "false" }).missingContact,
     ).toBe(false);
