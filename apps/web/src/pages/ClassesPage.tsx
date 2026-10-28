@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   canManageSchool,
   classSchema,
+  describeKolkataDay,
   friendlyTaskType,
   homeResponseSchema,
   schoolSchema,
@@ -114,7 +115,7 @@ export function ClassesPage() {
           <p className="mt-1 text-sm text-[var(--muted)]">
             {user?.name}
             {user && canManageSchool(user.role) ? " · Admin" : ""}
-            {home?.today ? ` · ${home.today}` : ""}
+            {home?.today ? ` · ${describeKolkataDay(home.today).longLabel}` : ""}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -160,7 +161,7 @@ export function ClassesPage() {
                   ? " · Students"
                   : continueVisit.path === "defaulters"
                     ? " · Defaulters"
-                    : " · Tick grid"}
+                    : " · Marking sheet"}
             </span>
           </span>
           <span className="shrink-0 text-sm font-medium">Open →</span>
@@ -268,7 +269,7 @@ export function ClassesPage() {
               </ul>
             ) : (
               <p className="mt-3 text-sm text-[var(--muted)]">
-                No tasks assigned today. Open the grid to add one.
+                No tasks assigned today. Open the marking sheet to add one.
               </p>
             )}
 
@@ -277,7 +278,7 @@ export function ClassesPage() {
                 to={`/classes/${classroom.id}/grid`}
                 className="col-span-2 flex min-h-11 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-medium text-white"
               >
-                Tick grid
+                Marking sheet
               </Link>
               <Link
                 to={`/classes/${classroom.id}/grid?type=ATTENDANCE`}

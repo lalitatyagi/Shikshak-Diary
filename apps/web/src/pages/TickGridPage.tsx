@@ -2,15 +2,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  addKolkataCalendarDays,
   ALL_WEEK_DAYS,
   classGridSchema,
   createRecurringTasksResultSchema,
   createTaskBodySchema,
   DAILY_HOMEWORK_TITLE_TEMPLATES,
-  expandRecurringDates,
+  DEFAULT_DAILY_HOMEWORK_TITLE,
+  describeKolkataDay,
+  isCalendarDateString,
   longPressStatuses,
+  plannedRepeatDates,
   primaryTapStatus,
+  repeatWindowDates,
   suggestDailyHomeworkTitle,
   taskSchema,
   taskTypeSchema,
@@ -44,6 +47,16 @@ const TYPE_FILTERS: Array<{ value: "" | TaskType; label: string }> = [
 ];
 
 const DAY_FILTERS = [7, 14, 30] as const;
+
+/** Enough to undo a full class of ~40, plus a second pass. Oldest entries drop first. */
+const UNDO_STACK_LIMIT = 80;
+
+type UndoMark = {
+  statusId: string;
+  status: StatusValue;
+  marks: number | null;
+  partsDone: number | null;
+};
 
 function statusLabel(status: StatusValue): string {
   switch (status) {
@@ -116,6 +129,26 @@ function statusKey(taskId: string, studentId: string): string {
   return `${taskId}:${studentId}`;
 }
 
+function columnTitle(task: { type: string; title: string }): string {
+  if (
+    task.type === "ATTENDANCE" &&
+    /^Attendance \d{4}-\d{2}-\d{2}$/.test(task.title)
+  ) {
+    return "Attendance";
+  }
+  return task.title;
+}
+
+function isAutoHomeworkTitle(title: string): boolean {
+  const trimmed = title.trim();
+  return (
+    trimmed.length === 0 ||
+    trimmed === DEFAULT_DAILY_HOMEWORK_TITLE ||
+    (DAILY_HOMEWORK_TITLE_TEMPLATES as readonly string[]).includes(trimmed) ||
+    /^Attendance( \d{4}-\d{2}-\d{2})?$/.test(trimmed)
+  );
+}
+
 function menuLabel(status: StatusValue, taskType: TaskType): string {
   if (taskType === "ATTENDANCE" && status === "INCOMPLETE") {
     return "Late";
@@ -139,6 +172,7 @@ export function TickGridPage() {
   const queuesRef = useRef(new Map<string, Promise<void>>());
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
+  const gridScrollerRef = useRef<HTMLDivElement>(null);
 
   const typeParam = searchParams.get("type") ?? "";
   const typeFilter = taskTypeSchema.safeParse(typeParam).success
@@ -177,12 +211,8 @@ export function TickGridPage() {
   } | null>(null);
   const [marksDraft, setMarksDraft] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [undoSnapshot, setUndoSnapshot] = useState<{
-    statusId: string;
-    status: StatusValue;
-    marks: number | null;
-    partsDone: number | null;
-  } | null>(null);
+  const undoStackRef = useRef<UndoMark[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
 
   const gridQuery = useQuery({
     queryKey,
@@ -268,12 +298,17 @@ export function TickGridPage() {
         }
 
         if (!options?.skipUndoCapture) {
-          setUndoSnapshot({
+          const stack = undoStackRef.current;
+          stack.push({
             statusId,
             status: cell.status,
             marks: cell.marks ?? null,
             partsDone: cell.partsDone ?? null,
           });
+          if (stack.length > UNDO_STACK_LIMIT) {
+            stack.splice(0, stack.length - UNDO_STACK_LIMIT);
+          }
+          setCanUndo(true);
         }
 
         // Optimistic update with explicit target status
@@ -390,7 +425,8 @@ export function TickGridPage() {
       if (!grid) {
         throw new Error("Grid not loaded");
       }
-      const toDate = addKolkataCalendarDays(newDueOn, 6);
+      const window = repeatWindowDates(newDueOn);
+      const toDate = window[window.length - 1] ?? newDueOn;
       const weekdays =
         repeatPattern === "daily"
           ? [...ALL_WEEK_DAYS]
@@ -458,11 +494,24 @@ export function TickGridPage() {
       );
     },
     onSuccess: async () => {
+      setSaveError(null);
       patchFilters({ type: "ATTENDANCE" });
       await queryClient.invalidateQueries({
         queryKey: ["grid", classId],
       });
       void queryClient.invalidateQueries({ queryKey: ["home"] });
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) {
+        setSaveError(null);
+        patchFilters({ type: "ATTENDANCE" });
+        return;
+      }
+      setSaveError(
+        error instanceof ApiError
+          ? error.message
+          : "Could not open attendance.",
+      );
     },
   });
 
@@ -500,24 +549,22 @@ export function TickGridPage() {
     setShowNewTask((open) => !open);
   }
 
-  const bulkMutation = useMutation({
-    mutationFn: async (taskId: string) =>
-      apiFetch(`/tasks/${taskId}/mark-all-complete`, { method: "POST" }),
-    onSuccess: () => {
-      setSaveError(null);
-      void queryClient.invalidateQueries({ queryKey });
-    },
-    onError: (error) => {
-      setSaveError(
-        error instanceof ApiError
-          ? error.message
-          : "Could not mark the class complete.",
-      );
-      void queryClient.invalidateQueries({ queryKey });
-    },
-  });
-
   const grid = gridQuery.data;
+  const today = toKolkataCalendarDate(new Date());
+  const todayTaskId = grid?.tasks.find((task) => task.assignedOn === today)?.id;
+
+  useEffect(() => {
+    const scroller = gridScrollerRef.current;
+    if (!scroller || !todayTaskId) return;
+    const cell = scroller.querySelector<HTMLElement>('[data-today="true"]');
+    if (!cell) return;
+    const delta =
+      cell.getBoundingClientRect().left -
+      scroller.getBoundingClientRect().left -
+      88;
+    scroller.scrollLeft += delta;
+  }, [todayTaskId, typeFilter, daysFilter]);
+
   const byKey = new Map(
     (grid?.statuses ?? []).map((row) => [
       statusKey(row.taskId, row.studentId),
@@ -534,24 +581,27 @@ export function TickGridPage() {
     createRecurringMutation.mutate();
   }
 
-  const recurringPreviewCount =
-    repeatPattern === "once"
-      ? 1
-      : expandRecurringDates(
-          newDueOn,
-          addKolkataCalendarDays(newDueOn, 6),
-          repeatPattern === "daily"
-            ? [...ALL_WEEK_DAYS]
-            : [...WEEKDAY_SCHOOL_DAYS],
-        ).length;
+  const dateIsValid = isCalendarDateString(newDueOn);
+  const windowDates = dateIsValid ? repeatWindowDates(newDueOn) : [];
+  const includedDates =
+    !dateIsValid
+      ? []
+      : repeatPattern === "once"
+        ? [newDueOn]
+        : plannedRepeatDates(
+            newDueOn,
+            repeatPattern === "daily" ? "daily" : "weekdays",
+          );
+  const includedSet = new Set(includedDates);
+  const selectedDay = dateIsValid ? describeKolkataDay(newDueOn) : null;
 
   const createPending =
     createTaskMutation.isPending || createRecurringMutation.isPending;
 
   function undoLastMark() {
-    if (!undoSnapshot) return;
-    const snap = undoSnapshot;
-    setUndoSnapshot(null);
+    const snap = undoStackRef.current.pop();
+    setCanUndo(undoStackRef.current.length > 0);
+    if (!snap) return;
     void enqueueStatusUpdate(
       snap.statusId,
       snap.status,
@@ -576,13 +626,13 @@ export function TickGridPage() {
             </Link>
           </div>
           <h1 className="truncate text-xl font-semibold text-[var(--accent)]">
-            {grid?.class.name ?? "Tick grid"}
+            {grid?.class.name ?? "Marking sheet"}
           </h1>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <button
             type="button"
-            disabled={!undoSnapshot}
+            disabled={!canUndo}
             onClick={undoLastMark}
             className="min-h-11 rounded-lg border border-[var(--accent)] px-3 text-sm font-medium text-[var(--accent)] disabled:opacity-40"
           >
@@ -733,7 +783,21 @@ export function TickGridPage() {
             <select
               className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3"
               value={newType}
-              onChange={(e) => setNewType(e.target.value as TaskType)}
+              onChange={(e) => {
+                const next = e.target.value as TaskType;
+                if (next === "ATTENDANCE" && isAutoHomeworkTitle(newTitle)) {
+                  setNewTitle("Attendance");
+                } else if (
+                  newType === "ATTENDANCE" &&
+                  next !== "ATTENDANCE" &&
+                  newTitle.trim() === "Attendance"
+                ) {
+                  setNewTitle(
+                    suggestDailyHomeworkTitle(grid?.tasks ?? [], newDueOn),
+                  );
+                }
+                setNewType(next);
+              }}
             >
               <option value="DAILY_HOMEWORK">Homework</option>
               <option value="NOTEBOOK_CHECK">Notebook check</option>
@@ -777,11 +841,54 @@ export function TickGridPage() {
             <input
               type="date"
               className="mt-1 w-full rounded-lg border border-emerald-900/15 px-3 py-3"
-              value={newDueOn}
+              value={dateIsValid ? newDueOn : ""}
               onChange={(e) => setNewDueOn(e.target.value)}
               required
             />
+            <p
+              className={`mt-1 text-sm ${selectedDay ? "font-medium text-[var(--ink)]" : "text-red-700"}`}
+            >
+              {selectedDay ? selectedDay.longLabel : "Choose a valid date."}
+            </p>
           </label>
+          {windowDates.length > 0 && (
+            <div>
+              <p className="text-sm text-[var(--muted)]">
+                {repeatPattern === "once"
+                  ? "Tap a day to choose it"
+                  : "Highlighted days will be created"}
+              </p>
+              <div className="mt-1 grid grid-cols-7 gap-1">
+                {windowDates.map((date) => {
+                  const day = describeKolkataDay(date);
+                  const included = includedSet.has(date);
+                  const isStart = date === newDueOn;
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      aria-pressed={isStart}
+                      aria-label={day.longLabel}
+                      onClick={() => setNewDueOn(date)}
+                      className={`min-h-14 rounded-lg px-0.5 text-center text-xs leading-tight ${
+                        included
+                          ? "bg-[var(--accent)] font-medium text-white"
+                          : "border border-emerald-900/15 text-[var(--muted)]"
+                      } ${isStart && !included ? "ring-2 ring-[var(--accent)]" : ""}`}
+                    >
+                      <span className="block">{day.weekdayShort}</span>
+                      <span className="block text-sm">{day.dayOfMonth}</span>
+                      {date > today && (
+                        <span className="block text-[10px] opacity-80">
+                          later
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <fieldset>
             <legend className="text-sm text-[var(--muted)]">Repeat</legend>
             <div className="mt-1 grid grid-cols-3 gap-2">
@@ -806,11 +913,13 @@ export function TickGridPage() {
                 </button>
               ))}
             </div>
-            {repeatPattern !== "once" && (
+            {repeatPattern !== "once" && includedDates.length > 0 && (
               <p className="mt-2 text-sm text-[var(--muted)]">
-                Creates {recurringPreviewCount} task
-                {recurringPreviewCount === 1 ? "" : "s"} from {newDueOn} (next 7
-                calendar days, matching days only).
+                {`Creates ${includedDates.length} task${
+                  includedDates.length === 1 ? "" : "s"
+                }: ${includedDates
+                  .map((date) => describeKolkataDay(date).label)
+                  .join(", ")}.`}
               </p>
             )}
           </fieldset>
@@ -827,14 +936,19 @@ export function TickGridPage() {
           )}
           <button
             type="submit"
-            disabled={createPending || !newTitle.trim()}
+            disabled={
+              createPending ||
+              !newTitle.trim() ||
+              !dateIsValid ||
+              includedDates.length === 0
+            }
             className="min-h-12 w-full rounded-lg bg-[var(--accent)] text-white disabled:opacity-60"
           >
             {createPending
               ? "Creating…"
               : repeatPattern === "once"
                 ? "Create task"
-                : `Create ${recurringPreviewCount} tasks`}
+                : `Create ${includedDates.length} tasks`}
           </button>
         </form>
       )}
@@ -881,33 +995,34 @@ export function TickGridPage() {
 
       {grid && grid.tasks.length > 0 && (
         <>
-          <div className="mb-3 flex gap-2 overflow-x-auto px-1 pb-1">
-            {grid.tasks.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                disabled={bulkMutation.isPending}
-                onClick={() => bulkMutation.mutate(task.id)}
-                className="min-h-11 shrink-0 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium whitespace-nowrap text-white"
-              >
-                Mark all · {task.title}
-              </button>
-            ))}
-          </div>
-
-          <div className="overflow-x-auto rounded-xl bg-[var(--surface)] shadow-sm">
+          <div
+            ref={gridScrollerRef}
+            className="overflow-x-auto rounded-xl bg-[var(--surface)] shadow-sm"
+          >
             <table className="w-max min-w-full border-collapse text-sm">
               <thead>
                 <tr>
                   <th className="sticky left-0 z-10 bg-[var(--surface)] px-2 py-3 text-left font-medium">
                     Student
                   </th>
-                  {grid.tasks.map((task) => (
+                  {grid.tasks.map((task) => {
+                    const day = describeKolkataDay(task.assignedOn);
+                    const isToday = task.assignedOn === today;
+                    return (
                     <th
                       key={task.id}
-                      className="max-w-[5.5rem] px-1 py-3 text-center text-xs font-medium break-words"
+                      data-today={isToday ? "true" : undefined}
+                      className={`max-w-[6.5rem] px-1 py-3 text-center text-xs font-medium break-words ${
+                        isToday ? "bg-emerald-50" : ""
+                      }`}
                     >
-                      <span className="block">{task.title}</span>
+                      <span
+                        className={`block ${isToday ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}
+                      >
+                        {day.label}
+                        {isToday ? " · Today" : ""}
+                      </span>
+                      <span className="mt-0.5 block">{columnTitle(task)}</span>
                       {task.type === "WEEKLY_TEST" && task.maxMarks != null && (
                         <span className="mt-0.5 block font-normal text-[var(--muted)]">
                           /{task.maxMarks}
@@ -920,7 +1035,8 @@ export function TickGridPage() {
                           </span>
                         )}
                     </th>
-                  ))}
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>

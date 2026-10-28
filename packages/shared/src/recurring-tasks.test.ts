@@ -5,6 +5,8 @@ import {
   WEEKDAY_SCHOOL_DAYS,
   createRecurringTasksBodySchema,
   expandRecurringDates,
+  plannedRepeatDates,
+  repeatWindowDates,
 } from "./recurring-tasks.js";
 
 describe("kolkataIsoWeekday", () => {
@@ -29,6 +31,26 @@ describe("expandRecurringDates", () => {
       "2026-10-29",
       "2026-10-30",
     ]);
+  });
+
+  it("plans the same 7-day window the grid form shows", () => {
+    expect(repeatWindowDates("2026-10-28")).toEqual([
+      "2026-10-28",
+      "2026-10-29",
+      "2026-10-30",
+      "2026-10-31",
+      "2026-11-01",
+      "2026-11-02",
+      "2026-11-03",
+    ]);
+    expect(plannedRepeatDates("2026-10-28", "weekdays")).toEqual([
+      "2026-10-28",
+      "2026-10-29",
+      "2026-10-30",
+      "2026-11-02",
+      "2026-11-03",
+    ]);
+    expect(plannedRepeatDates("2026-10-28", "daily")).toHaveLength(7);
   });
 
   it("can include weekends", () => {

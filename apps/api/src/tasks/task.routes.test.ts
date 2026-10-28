@@ -191,6 +191,23 @@ describe("task routes", () => {
     };
     expect(body.type).toBe("ATTENDANCE");
     expect(body.statusCount).toBe(3);
+
+    const duplicate = await app.inject({
+      method: "POST",
+      url: `/classes/${classId}/tasks`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        subjectId,
+        type: "ATTENDANCE",
+        title: "Revision",
+        assignedOn: "2026-10-03",
+        dueOn: "2026-10-03",
+      },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json()).toMatchObject({
+      error: "Attendance for 2026-10-03 already exists",
+    });
   });
 
   it("creates WEEKLY_TEST and HOLIDAY_HOMEWORK with typed fields", async () => {

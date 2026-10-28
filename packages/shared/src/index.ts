@@ -84,6 +84,8 @@ export {
   defaultersWindow,
   isPastDueInKolkata,
   kolkataIsoWeekday,
+  describeKolkataDay,
+  type KolkataDayLabel,
 } from "./dates.js";
 export {
   MAX_RECURRING_TASKS,
@@ -93,6 +95,8 @@ export {
   createRecurringTasksBodySchema,
   createRecurringTasksResultSchema,
   expandRecurringDates,
+  repeatWindowDates,
+  plannedRepeatDates,
   type CreateRecurringTasksBody,
   type CreateRecurringTasksResult,
 } from "./recurring-tasks.js";

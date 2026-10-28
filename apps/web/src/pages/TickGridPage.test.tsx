@@ -100,6 +100,7 @@ describe("TickGridPage status errors", () => {
 
     renderGrid();
 
+    expect(await screen.findByText("Sat 3 Oct")).toBeTruthy();
     const cell = await screen.findByRole("button", {
       name: "Aarav Sharma Exercise",
     });
@@ -207,6 +208,61 @@ describe("TickGridPage status errors", () => {
     });
     expect(putBodies[0]).toMatchObject({ status: "DONE", version: 1 });
     expect(putBodies[1]).toMatchObject({ status: "PENDING", version: 2 });
+    await waitFor(() => {
+      expect(undo.hasAttribute("disabled")).toBe(true);
+    });
+  });
+
+  it("undoes several taps in reverse order", async () => {
+    const putBodies: Array<{ status: string; version: number }> = [];
+    vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+      if (String(path).includes("/grid")) {
+        return grid;
+      }
+      const body = JSON.parse(String(init?.body)) as {
+        status: string;
+        version: number;
+      };
+      putBodies.push(body);
+      return {
+        ...grid.statuses[0],
+        status: body.status,
+        version: body.version + 1,
+      };
+    });
+
+    renderGrid();
+    const cell = await screen.findByRole("button", {
+      name: "Aarav Sharma Exercise",
+    });
+    const undo = screen.getByRole("button", { name: "Undo" });
+
+    cell.click();
+    await waitFor(() => {
+      expect(cell.textContent).toMatch(/Done/);
+    });
+    cell.click();
+    await waitFor(() => {
+      expect(cell.textContent).toMatch(/Not/);
+    });
+
+    fireEvent.click(undo);
+    await waitFor(() => {
+      expect(cell.textContent).toMatch(/Done/);
+    });
+    expect(undo.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(undo);
+    await waitFor(() => {
+      expect(cell.textContent).toMatch(/—/);
+    });
+    expect(undo.hasAttribute("disabled")).toBe(true);
+    expect(putBodies.map((body) => body.status)).toEqual([
+      "DONE",
+      "NOT_DONE",
+      "DONE",
+      "PENDING",
+    ]);
   });
 
   it("opens a marks sheet for weekly tests and saves the score", async () => {

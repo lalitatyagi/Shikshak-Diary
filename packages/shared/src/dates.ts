@@ -85,6 +85,75 @@ export function isPastDueInKolkata(
   return toKolkataCalendarDate(dueOn) < toKolkataCalendarDate(now);
 }
 
+const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+const WEEKDAY_LONG = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
+const MONTH_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+export type KolkataDayLabel = {
+  date: string;
+  /** Monday=1 … Sunday=7. */
+  weekdayIndex: number;
+  weekdayShort: string;
+  weekdayLong: string;
+  dayOfMonth: number;
+  monthShort: string;
+  /** e.g. "Wed 28 Oct" — day before month, so it cannot be read as MM/DD. */
+  label: string;
+  /** e.g. "Wednesday, 28 Oct 2026". */
+  longLabel: string;
+};
+
+/**
+ * Labels a YYYY-MM-DD Kolkata calendar date without going through the
+ * browser locale (which may show 10/28/2026 or 28-10-2026).
+ */
+export function describeKolkataDay(dateStr: string): KolkataDayLabel {
+  if (!isCalendarDateString(dateStr)) {
+    throw new Error(`Expected YYYY-MM-DD, got: ${dateStr}`);
+  }
+  const monthIndex = Number(dateStr.slice(5, 7));
+  const dayOfMonth = Number(dateStr.slice(8, 10));
+  const monthShort = MONTH_SHORT[monthIndex - 1];
+  if (!monthShort || dayOfMonth < 1 || dayOfMonth > 31) {
+    throw new Error(`Expected YYYY-MM-DD, got: ${dateStr}`);
+  }
+  const weekdayIndex = kolkataIsoWeekday(dateStr);
+  const weekdayShort = WEEKDAY_SHORT[weekdayIndex - 1] ?? "Day";
+  const weekdayLong = WEEKDAY_LONG[weekdayIndex - 1] ?? "Day";
+  const year = dateStr.slice(0, 4);
+  return {
+    date: dateStr,
+    weekdayIndex,
+    weekdayShort,
+    weekdayLong,
+    dayOfMonth,
+    monthShort,
+    label: `${weekdayShort} ${dayOfMonth} ${monthShort}`,
+    longLabel: `${weekdayLong}, ${dayOfMonth} ${monthShort} ${year}`,
+  };
+}
+
 /** ISO weekday in Asia/Kolkata: Monday=1 … Sunday=7. */
 export function kolkataIsoWeekday(dateStr: string): number {
   const short = new Intl.DateTimeFormat("en-US", {

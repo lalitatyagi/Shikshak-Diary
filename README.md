@@ -38,9 +38,9 @@ Phone-width captures from the seeded demo class **8-B** (40 students).
 | --- | --- |
 | ![Login](docs/screenshots/01-login.png) | ![Classes](docs/screenshots/02-classes.png) |
 
-| Tick grid | Defaulters |
+| Marking sheet | Defaulters |
 | --- | --- |
-| ![Tick grid](docs/screenshots/03-tick-grid.png) | ![Defaulters](docs/screenshots/04-defaulters.png) |
+| ![Marking sheet](docs/screenshots/03-tick-grid.png) | ![Defaulters](docs/screenshots/04-defaulters.png) |
 
 ## What it does
 
@@ -50,7 +50,7 @@ Phone-width captures from the seeded demo class **8-B** (40 students).
 - **Classes** — **New class** for schools you belong to (demo seed has one school)
 - **CSV roster import** — class teachers import students from a file or paste (per-row errors)
 - **Parent phones** — roster shows who is missing a number; class teachers add/edit inline (needed for WhatsApp)
-- **Tick grid** — students × tasks; tap to cycle status; bulk “mark all done”
+- **Marking sheet** — students × tasks; tap each cell to cycle that student's status
 - **Task types** — daily homework, notebook check, weekly test (marks), holiday homework (parts), **attendance** (present / absent / late on the same grid)
 - **Take attendance** — one tap creates today's attendance column; tap cycles P ↔ A
 - **Today's HW** — one tap creates today's daily homework (repeats yesterday's title when available); quick title chips in New task
@@ -68,7 +68,7 @@ Phone-width captures from the seeded demo class **8-B** (40 students).
 | Seeded demo class | 1 school, 1 teacher, **40** students, 2 sample tasks |
 | Unit / integration tests | **167** across api + web + shared (`npm test`) |
 | Shared package coverage | **~98%** lines (CI floor: 90% lines/functions/statements, 85% branches) |
-| Playwright smoke | 1 browser flow: login → tick grid → mark a cell |
+| Playwright smoke | 1 browser flow: login → marking sheet → mark a cell |
 | Prisma models | 12 (unified `Task` / `TaskStatus` for all activity types) |
 | Target class size | ~40 students; full-class marking under a minute on a phone |
 
@@ -130,11 +130,11 @@ npm run dev:web
 - Web: http://localhost:5173
 - API health: http://localhost:3001/health
 
-Open the web app → sign in → pick **8-B** → tick grid, students (report +
+Open the web app → sign in → pick **8-B** → marking sheet, students (report +
 parent link), or defaulters.
 
 **PWA:** production builds register a service worker. Install from the browser
-(“Add to Home Screen”). The tick grid caches the last successful load and
+(“Add to Home Screen”). The marking sheet caches the last successful load and
 queues marks while offline, then syncs on reconnect.
 
 ## Scripts
@@ -189,7 +189,7 @@ CSV columns: `rollNumber`, `name`, optional `parentContact`. Max 200 rows per
 import. A roll that belongs to a student in a class you cannot access is a
 per-row error (no rename / enroll).
 
-### Tasks & tick grid
+### Tasks & marking sheet
 
 | Method | Path | Notes |
 | --- | --- | --- |

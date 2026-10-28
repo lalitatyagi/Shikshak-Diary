@@ -210,7 +210,7 @@ export function StudentsPage() {
             to={`/classes/${classId}/grid`}
             className="text-sm text-[var(--accent)] underline"
           >
-            Tick grid
+            Marking sheet
           </Link>
         </div>
         <h1 className="mt-2 text-2xl font-semibold text-[var(--accent)]">

@@ -131,6 +131,35 @@ export type CreateRecurringTasksResult = z.infer<
   typeof createRecurringTasksResultSchema
 >;
 
+/** Seven Kolkata calendar days starting at fromDate (inclusive). */
+export function repeatWindowDates(fromDate: string): string[] {
+  if (!isCalendarDateString(fromDate)) {
+    throw new Error("fromDate must be YYYY-MM-DD");
+  }
+  const dates: string[] = [];
+  let cursor = fromDate;
+  for (let step = 0; step < 7; step += 1) {
+    dates.push(cursor);
+    cursor = addKolkataCalendarDays(cursor, 1);
+  }
+  return dates;
+}
+
+/**
+ * Dates a Mon–Fri or every-day repeat will create, matching the grid form:
+ * the next 7 calendar days from fromDate, matching weekdays only.
+ */
+export function plannedRepeatDates(
+  fromDate: string,
+  pattern: "weekdays" | "daily",
+): string[] {
+  const window = repeatWindowDates(fromDate);
+  const toDate = window[window.length - 1] ?? fromDate;
+  const weekdays =
+    pattern === "daily" ? [...ALL_WEEK_DAYS] : [...WEEKDAY_SCHOOL_DAYS];
+  return expandRecurringDates(fromDate, toDate, weekdays);
+}
+
 /**
  * Inclusive date list in [fromDate, toDate] whose Kolkata weekday is in
  * `weekdays`. Throws if the span exceeds MAX_RECURRING_SPAN_DAYS calendar days.

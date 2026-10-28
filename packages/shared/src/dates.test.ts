@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addKolkataCalendarDays,
   defaultersWindow,
+  describeKolkataDay,
   isPastDueInKolkata,
   kolkataCalendarDateToInstant,
   parseToKolkataCalendarDate,
@@ -54,6 +55,19 @@ describe("Kolkata calendar dates", () => {
     );
     expect(() => parseToKolkataCalendarDate("not-a-date")).toThrow(/Invalid/);
     expect(() => defaultersWindow(0)).toThrow(/positive integer/);
+  });
+
+  it("labels a Kolkata day as weekday then day then month", () => {
+    expect(describeKolkataDay("2026-10-28")).toMatchObject({
+      weekdayShort: "Wed",
+      weekdayLong: "Wednesday",
+      dayOfMonth: 28,
+      monthShort: "Oct",
+      label: "Wed 28 Oct",
+      longLabel: "Wednesday, 28 Oct 2026",
+    });
+    expect(describeKolkataDay("2026-10-03").label).toBe("Sat 3 Oct");
+    expect(() => describeKolkataDay("28-10-2026")).toThrow(/YYYY-MM-DD/);
   });
 
   it("shifts Kolkata days and builds a defaulters window", () => {

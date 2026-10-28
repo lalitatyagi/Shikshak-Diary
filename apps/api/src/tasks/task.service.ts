@@ -112,6 +112,25 @@ export async function createTaskForClass(
       select: { studentId: true },
     });
 
+    if (input.type === "ATTENDANCE") {
+      const dayEnd = new Date(assignedOn.getTime() + 24 * 60 * 60 * 1000);
+      const existing = await tx.task.findFirst({
+        where: {
+          classId,
+          subjectId: input.subjectId,
+          type: "ATTENDANCE",
+          assignedOn: { gte: assignedOn, lt: dayEnd },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new HttpError(
+          `Attendance for ${input.assignedOn} already exists`,
+          409,
+        );
+      }
+    }
+
     const task = await tx.task.create({
       data: {
         classId,
@@ -191,7 +210,8 @@ export async function createRecurringTasksForClass(
           classId,
           subjectId: input.subjectId,
           type: input.type,
-          title: input.title,
+          // One attendance sheet per subject per day, even if the title differs.
+          ...(input.type === "ATTENDANCE" ? {} : { title: input.title }),
           assignedOn: { gte: dayStart, lt: dayEnd },
         },
         select: { id: true },

@@ -1,6 +1,7 @@
-import type {
-  StudentReport,
-  StudentReportTask,
+import {
+  describeKolkataDay,
+  type StudentReport,
+  type StudentReportTask,
 } from "@classroom-tracker/shared";
 
 function statusLabel(status: StudentReportTask["status"]): string {
@@ -53,7 +54,8 @@ export function StudentReportView({ report }: { report: StudentReport }) {
                 <div>
                   <p className="font-medium">{task.title}</p>
                   <p className="mt-0.5 text-sm text-[var(--muted)]">
-                    {task.type.replaceAll("_", " ")} · {task.assignedOn}
+                    {task.type.replaceAll("_", " ")} ·{" "}
+                    {describeKolkataDay(task.assignedOn).label}
                   </p>
                   {detail && (
                     <p className="mt-1 text-sm text-[var(--ink)]">{detail}</p>

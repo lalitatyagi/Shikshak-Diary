@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * Portfolio smoke: demo teacher signs in, opens 8-B tick grid, taps one cell.
+ * Portfolio smoke: demo teacher signs in, opens 8-B marking sheet, taps one cell.
  */
 test("teacher logs in and marks a homework cell", async ({ page }) => {
   await page.goto("/login");
@@ -19,7 +19,7 @@ test("teacher logs in and marks a homework cell", async ({ page }) => {
   );
   await expect(page.getByText("8-B")).toBeVisible();
 
-  await page.getByRole("link", { name: "Tick grid" }).first().click();
+  await page.getByRole("link", { name: "Marking sheet" }).first().click();
 
   await expect(page.getByRole("heading", { name: "8-B" })).toBeVisible({
     timeout: 15_000,
