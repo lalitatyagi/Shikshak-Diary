@@ -9,6 +9,7 @@ import { hashPassword } from "../auth/password.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
+  insertClassForUser,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -57,23 +58,15 @@ describe("tick grid status routes", () => {
 
     await grantClassTeacherMembership(email, schoolId);
 
-    classId = (
-      await app.inject({
-        method: "POST",
-        url: "/classes",
-        headers: { authorization: `Bearer ${accessToken}` },
-        payload: {
-          schoolId,
-          name: "8-G",
-          academicYear: "2025-26",
-          subjectName: "Math",
-        },
-      })
-    ).json().id as string;
-
-    subjectId = (
-      await prisma.teacherClassSubject.findFirstOrThrow({ where: { classId } })
-    ).subjectId;
+    const createdClass = await insertClassForUser({
+      email,
+      schoolId,
+      name: "8-G",
+      academicYear: "2025-26",
+      subjectName: "Math",
+    });
+    classId = createdClass.id;
+    subjectId = createdClass.subjectId;
 
     await app.inject({
       method: "POST",

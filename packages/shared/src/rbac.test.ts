@@ -19,7 +19,7 @@ describe("rbac capabilities", () => {
 
   it("lets subject teachers teach but not manage roster", () => {
     expect(canTeachClass("TEACHER")).toBe(true);
-    expect(canCreateClass("TEACHER")).toBe(true);
+    expect(canCreateClass("TEACHER")).toBe(false);
     expect(canManageRoster("TEACHER")).toBe(false);
     expect(canManageParentLinks("TEACHER")).toBe(false);
   });
@@ -27,11 +27,13 @@ describe("rbac capabilities", () => {
   it("lets class teachers manage roster and parent links", () => {
     expect(canManageRoster("CLASS_TEACHER")).toBe(true);
     expect(canManageParentLinks("CLASS_TEACHER")).toBe(true);
+    expect(canCreateClass("CLASS_TEACHER")).toBe(false);
     expect(canManageSchool("CLASS_TEACHER")).toBe(false);
   });
 
   it("gives admins school + roster control", () => {
     expect(canManageSchool("ADMIN")).toBe(true);
+    expect(canCreateClass("ADMIN")).toBe(true);
     expect(canManageRoster("ADMIN")).toBe(true);
     expect(canTeachClass("ADMIN")).toBe(true);
   });

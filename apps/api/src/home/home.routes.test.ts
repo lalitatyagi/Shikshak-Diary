@@ -11,6 +11,7 @@ import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
+  insertClassForUser,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -49,18 +50,14 @@ describe("home routes", () => {
     await grantClassTeacherMembership(email, schoolId);
 
     classId = (
-      await app.inject({
-        method: "POST",
-        url: "/classes",
-        headers: { authorization: `Bearer ${accessToken}` },
-        payload: {
-          schoolId,
-          name: "8-H",
-          academicYear: "2025-26",
-          subjectName: "Math",
-        },
+      await insertClassForUser({
+        email,
+        schoolId,
+        name: "8-H",
+        academicYear: "2025-26",
+        subjectName: "Math",
       })
-    ).json().id as string;
+    ).id;
 
     await app.inject({
       method: "POST",

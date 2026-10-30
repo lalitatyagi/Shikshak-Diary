@@ -9,6 +9,7 @@ import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
+  insertClassForUser,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -22,6 +23,7 @@ describe("class routes", () => {
   let schoolId: string;
   let accessToken: string;
   let otherToken: string;
+  let adminToken: string;
   let teacherEmail: string;
   const emails: string[] = [];
   const classIds: string[] = [];
@@ -54,6 +56,23 @@ describe("class routes", () => {
     otherToken = (otherRes.json() as { accessToken: string }).accessToken;
 
     await grantClassTeacherMembership(teacherEmail, schoolId);
+
+    const adminEmail = uniqueEmail("class-admin");
+    emails.push(adminEmail);
+    await prisma.user.create({
+      data: {
+        name: "Class Admin",
+        email: adminEmail,
+        passwordHash: await hashPassword("Password123!"),
+        role: Role.ADMIN,
+      },
+    });
+    const adminLogin = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: adminEmail, password: "Password123!" },
+    });
+    adminToken = (adminLogin.json() as { accessToken: string }).accessToken;
   });
 
   afterAll(async () => {
@@ -70,7 +89,7 @@ describe("class routes", () => {
     await prisma.$disconnect();
   });
 
-  it("lists schools and creates a class for the teacher", async () => {
+  it("lists schools for a teacher and only lets an admin create a class", async () => {
     const schools = await app.inject({
       method: "GET",
       url: "/schools",
@@ -81,10 +100,23 @@ describe("class routes", () => {
       (schools.json() as Array<{ id: string }>).some((s) => s.id === schoolId),
     ).toBe(true);
 
-    const created = await app.inject({
+    const denied = await app.inject({
       method: "POST",
       url: "/classes",
       headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        schoolId,
+        name: "8-A",
+        academicYear: "2025-26",
+        subjectName: "Science",
+      },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/classes",
+      headers: { authorization: `Bearer ${adminToken}` },
       payload: {
         schoolId,
         name: "8-A",
@@ -106,7 +138,7 @@ describe("class routes", () => {
     const listed = await app.inject({
       method: "GET",
       url: "/classes",
-      headers: { authorization: `Bearer ${accessToken}` },
+      headers: { authorization: `Bearer ${adminToken}` },
     });
     expect(listed.statusCode).toBe(200);
     expect(
@@ -115,17 +147,12 @@ describe("class routes", () => {
   });
 
   it("imports valid CSV rows and reports per-row errors", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/classes",
-      headers: { authorization: `Bearer ${accessToken}` },
-      payload: {
-        schoolId,
-        name: "8-C",
-        academicYear: "2025-26",
-      },
+    const { id: classId } = await insertClassForUser({
+      email: teacherEmail,
+      schoolId,
+      name: "8-C",
+      academicYear: "2025-26",
     });
-    const classId = (created.json() as { id: string }).id;
     classIds.push(classId);
 
     const csv = [
@@ -224,17 +251,12 @@ describe("class routes", () => {
   });
 
   it("forbids another teacher from viewing or importing an unassigned class", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/classes",
-      headers: { authorization: `Bearer ${accessToken}` },
-      payload: {
-        schoolId,
-        name: "9-A",
-        academicYear: "2025-26",
-      },
+    const { id: classId } = await insertClassForUser({
+      email: teacherEmail,
+      schoolId,
+      name: "9-A",
+      academicYear: "2025-26",
     });
-    const classId = (created.json() as { id: string }).id;
     classIds.push(classId);
 
     const listStudents = await app.inject({
@@ -283,18 +305,12 @@ describe("class routes", () => {
   });
 
   it("does not overwrite a student enrolled in a class the importer cannot access", async () => {
-    const ownerClass = await app.inject({
-      method: "POST",
-      url: "/classes",
-      headers: { authorization: `Bearer ${accessToken}` },
-      payload: {
-        schoolId,
-        name: `Own-${Date.now().toString(36)}`,
-        academicYear: "2025-26",
-      },
+    const { id: ownerClassId } = await insertClassForUser({
+      email: teacherEmail,
+      schoolId,
+      name: `Own-${Date.now().toString(36)}`,
+      academicYear: "2025-26",
     });
-    expect(ownerClass.statusCode).toBe(201);
-    const ownerClassId = (ownerClass.json() as { id: string }).id;
     classIds.push(ownerClassId);
 
     const firstImport = await app.inject({
@@ -317,18 +333,12 @@ describe("class routes", () => {
       .accessToken;
     await grantClassTeacherMembership(attackerEmail, schoolId);
 
-    const attackerClass = await app.inject({
-      method: "POST",
-      url: "/classes",
-      headers: { authorization: `Bearer ${attackerToken}` },
-      payload: {
-        schoolId,
-        name: `Atk-${Date.now().toString(36)}`,
-        academicYear: "2025-26",
-      },
+    const { id: attackerClassId } = await insertClassForUser({
+      email: attackerEmail,
+      schoolId,
+      name: `Atk-${Date.now().toString(36)}`,
+      academicYear: "2025-26",
     });
-    expect(attackerClass.statusCode).toBe(201);
-    const attackerClassId = (attackerClass.json() as { id: string }).id;
     classIds.push(attackerClassId);
 
     const secondImport = await app.inject({
@@ -356,21 +366,7 @@ describe("class routes", () => {
     expect(stored.parentContact).toBeNull();
   });
 
-  it("rejects creating a class in a school the teacher does not belong to", async () => {
-    // Ensure this teacher already belongs to schoolId (not bootstrap / zero-assignment).
-    const home = await app.inject({
-      method: "POST",
-      url: "/classes",
-      headers: { authorization: `Bearer ${accessToken}` },
-      payload: {
-        schoolId,
-        name: `Home-${Date.now().toString(36)}`,
-        academicYear: "2025-26",
-      },
-    });
-    expect(home.statusCode).toBe(201);
-    classIds.push((home.json() as { id: string }).id);
-
+  it("lets an admin create a class in any existing school", async () => {
     const foreignSchool = await prisma.school.create({
       data: { name: `Foreign School ${Date.now()}` },
     });
@@ -379,16 +375,15 @@ describe("class routes", () => {
       const response = await app.inject({
         method: "POST",
         url: "/classes",
-        headers: { authorization: `Bearer ${accessToken}` },
+        headers: { authorization: `Bearer ${adminToken}` },
         payload: {
           schoolId: foreignSchool.id,
-          name: "Intruder-A",
+          name: "Admin-A",
           academicYear: "2025-26",
         },
       });
 
-      expect(response.statusCode).toBe(403);
-      expect((response.json() as { error: string }).error).toMatch(/school/i);
+      expect(response.statusCode).toBe(201);
     } finally {
       await prisma.school.delete({ where: { id: foreignSchool.id } });
     }
@@ -398,7 +393,7 @@ describe("class routes", () => {
     const first = await app.inject({
       method: "POST",
       url: "/classes",
-      headers: { authorization: `Bearer ${accessToken}` },
+      headers: { authorization: `Bearer ${adminToken}` },
       payload: {
         schoolId,
         name: "7-B",
@@ -410,7 +405,7 @@ describe("class routes", () => {
     const second = await app.inject({
       method: "POST",
       url: "/classes",
-      headers: { authorization: `Bearer ${accessToken}` },
+      headers: { authorization: `Bearer ${adminToken}` },
       payload: {
         schoolId,
         name: "7-B",
@@ -433,28 +428,18 @@ describe("class routes", () => {
       .accessToken;
     await grantClassTeacherMembership(otherEmail, schoolId);
 
-    const firstClass = await app.inject({
-      method: "POST",
-      url: "/classes",
-      headers: { authorization: `Bearer ${accessToken}` },
-      payload: {
-        schoolId,
-        name: `Race-A-${Date.now().toString(36)}`,
-        academicYear: "2025-26",
-      },
+    const { id: classA } = await insertClassForUser({
+      email: teacherEmail,
+      schoolId,
+      name: `Race-A-${Date.now().toString(36)}`,
+      academicYear: "2025-26",
     });
-    const secondClass = await app.inject({
-      method: "POST",
-      url: "/classes",
-      headers: { authorization: `Bearer ${otherAccess}` },
-      payload: {
-        schoolId,
-        name: `Race-B-${Date.now().toString(36)}`,
-        academicYear: "2025-26",
-      },
+    const { id: classB } = await insertClassForUser({
+      email: otherEmail,
+      schoolId,
+      name: `Race-B-${Date.now().toString(36)}`,
+      academicYear: "2025-26",
     });
-    const classA = (firstClass.json() as { id: string }).id;
-    const classB = (secondClass.json() as { id: string }).id;
     classIds.push(classA, classB);
 
     const [left, right] = await Promise.all([

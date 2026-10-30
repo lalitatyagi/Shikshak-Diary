@@ -13,6 +13,7 @@ import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
+  insertClassForUser,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -59,23 +60,15 @@ describe("task routes", () => {
 
     await grantClassTeacherMembership(email, schoolId);
 
-    const createdClass = await app.inject({
-      method: "POST",
-      url: "/classes",
-      headers: { authorization: `Bearer ${accessToken}` },
-      payload: {
-        schoolId,
-        name: "8-T",
-        academicYear: "2025-26",
-        subjectName: "Mathematics",
-      },
+    const createdClass = await insertClassForUser({
+      email,
+      schoolId,
+      name: "8-T",
+      academicYear: "2025-26",
+      subjectName: "Mathematics",
     });
-    classId = (createdClass.json() as { id: string }).id;
-
-    const assignment = await prisma.teacherClassSubject.findFirstOrThrow({
-      where: { classId },
-    });
-    subjectId = assignment.subjectId;
+    classId = createdClass.id;
+    subjectId = createdClass.subjectId;
 
     await app.inject({
       method: "POST",

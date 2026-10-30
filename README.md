@@ -47,7 +47,7 @@ Phone-width captures from the seeded demo class **8-B** (40 students).
 - **Sign in / Sign up** — email + password + Indian mobile; SMS OTP before the account is created; school access needs an **admin** (`/admin/schools`: add teachers, invite, assign to classes, manage all classes)
 - **Admin portal** — create school, add teacher accounts, invite existing users, assign teachers to classes, open any class grid/students/defaulters
 - **Home dashboard** — per class: pending today, week attendance %, homework done %, top defaulters, quick links to grid / students / defaulters
-- **Classes** — **New class** for schools you belong to (demo seed has one school)
+- **Classes** — teachers see classes an admin assigned them; only an **admin** can add a class
 - **CSV roster import** — class teachers import students from a file or paste (per-row errors)
 - **Parent phones** — roster shows who is missing a number; class teachers add/edit inline (needed for WhatsApp)
 - **Marking sheet** — students × tasks; tap each cell to cycle that student's status
@@ -180,7 +180,7 @@ npx playwright install chromium
 | GET | `/schools/:schoolId/classes` | ADMIN lists all classes in a school |
 | POST | `/classes/:classId/assignments` | ADMIN assigns a school teacher to a class |
 | GET | `/classes` | Classes assigned to the teacher (ADMIN: all classes) |
-| POST | `/classes` | Create a class in a school the teacher belongs to |
+| POST | `/classes` | **ADMIN** only — create a class in an existing school |
 | GET | `/classes/:classId/students` | Paginated students (`page`, `pageSize`, `q`, `missingContact=1`) + `missingParentContactCount` |
 | PATCH | `/classes/:classId/students/:studentId` | Class teacher / admin sets `parentContact` (Indian mobile → E.164) |
 | POST | `/classes/:classId/students/import` | CSV import — **CLASS_TEACHER** or **ADMIN** only |

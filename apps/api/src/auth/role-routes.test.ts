@@ -10,6 +10,7 @@ import { hashPassword } from "./password.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
+  insertClassForUser,
 } from "../test/school-member.js";
 
 loadEnv();
@@ -87,22 +88,15 @@ describe("role checks on class, task, and status routes", () => {
     expect(deniedSchool.statusCode).toBe(403);
 
     const today = toKolkataCalendarDate(new Date());
-    const createdClass = await app.inject({
-      method: "POST",
-      url: "/classes",
-      headers: { authorization: `Bearer ${teacherToken}` },
-      payload: {
-        schoolId,
-        name: "8-R",
-        academicYear: "2025-26",
-        subjectName: "Math",
-      },
+    const createdClass = await insertClassForUser({
+      email: teacherEmail,
+      schoolId,
+      name: "8-R",
+      academicYear: "2025-26",
+      subjectName: "Math",
     });
-    classId = (createdClass.json() as { id: string }).id;
-
-    const subjectId = (
-      await prisma.teacherClassSubject.findFirstOrThrow({ where: { classId } })
-    ).subjectId;
+    classId = createdClass.id;
+    const subjectId = createdClass.subjectId;
     await app.inject({
       method: "POST",
       url: `/classes/${classId}/tasks`,

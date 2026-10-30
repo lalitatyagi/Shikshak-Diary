@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import {
+  canCreateClass,
   classSchema,
   normalizeIndianPhone,
   schoolMemberSchema,
@@ -82,29 +83,20 @@ export async function listSchoolsForUser(
 }
 
 /**
- * A teacher may create a class only in a school they have been invited to.
- * ADMIN may create a class in any existing school.
+ * Only an admin may create a class, and only in a school that exists.
  */
 export async function assertCanCreateInSchool(
-  teacherId: string,
+  _teacherId: string,
   role: Role,
   schoolId: string,
 ): Promise<void> {
+  if (!canCreateClass(role)) {
+    throw new HttpError("Only an admin can create a class", 403);
+  }
+
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
   if (!school) {
     throw new HttpError("School not found", 404);
-  }
-
-  if (role === "ADMIN") {
-    return;
-  }
-
-  const membership = await prisma.schoolMember.findUnique({
-    where: { userId_schoolId: { userId: teacherId, schoolId } },
-    select: { userId: true },
-  });
-  if (!membership) {
-    throw new HttpError("You do not belong to this school", 403);
   }
 }
 

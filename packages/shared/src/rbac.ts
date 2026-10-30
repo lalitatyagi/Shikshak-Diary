@@ -14,9 +14,9 @@ export function canManageSchool(role: Role): boolean {
   return role === "ADMIN";
 }
 
-/** Create classes in a school the user belongs to (or any school for ADMIN). */
+/** Create a class. Only a school admin, not a teacher. */
 export function canCreateClass(role: Role): boolean {
-  return isTeacherRole(role);
+  return role === "ADMIN";
 }
 
 /** CSV import / roster edits — class teacher or admin. */

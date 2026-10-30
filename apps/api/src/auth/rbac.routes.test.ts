@@ -7,6 +7,7 @@ import { registerVerifiedTeacher } from "../test/register.js";
 import {
   deleteUsersByEmail,
   grantClassTeacherMembership,
+  insertClassForUser,
   grantSchoolMembership,
 } from "../test/school-member.js";
 
@@ -57,24 +58,17 @@ describe("RBAC roster vs subject teacher", () => {
     await grantClassTeacherMembership(classTeacherEmail, schoolId);
     await grantSchoolMembership(subjectEmail, schoolId);
 
-    classId = (
-      await app.inject({
-        method: "POST",
-        url: "/classes",
-        headers: { authorization: `Bearer ${classTeacherToken}` },
-        payload: {
-          schoolId,
-          name: "8-RBAC",
-          academicYear: "2025-26",
-          subjectName: "Math",
-        },
-      })
-    ).json().id as string;
+    const createdClass = await insertClassForUser({
+      email: classTeacherEmail,
+      schoolId,
+      name: "8-RBAC",
+      academicYear: "2025-26",
+      subjectName: "Math",
+    });
+    classId = createdClass.id;
 
     // Assign subject teacher to the same class/subject.
-    const subjectId = (
-      await prisma.teacherClassSubject.findFirstOrThrow({ where: { classId } })
-    ).subjectId;
+    const subjectId = createdClass.subjectId;
     const subjectUser = await prisma.user.findUniqueOrThrow({
       where: { email: subjectEmail },
     });

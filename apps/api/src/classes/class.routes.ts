@@ -179,7 +179,7 @@ export async function classRoutes(app: FastifyInstance): Promise<void> {
 
   app.post(
     "/classes",
-    { preHandler: [requireAuth, requireRole(...teacherRoles)] },
+    { preHandler: [requireAuth, requireRole("ADMIN")] },
     async (request, reply) => {
       const parsed = createClassBodySchema.safeParse(request.body);
       if (!parsed.success) {

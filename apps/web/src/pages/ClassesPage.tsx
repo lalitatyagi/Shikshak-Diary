@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  canCreateClass,
   canManageSchool,
   classSchema,
   describeKolkataDay,
@@ -320,7 +321,7 @@ export function ClassesPage() {
               <span className="font-medium text-[var(--ink)]">
                 {user?.email}
               </span>
-              . After they invite you, refresh this page and create a class.
+              . After they invite you, refresh this page.
             </p>
             <p className="text-sm text-[var(--muted)]">
               Demo tip:{" "}
@@ -338,11 +339,16 @@ export function ClassesPage() {
 
       {!homeQuery.isPending && classes.length === 0 && schools.length > 0 && (
         <p className="mt-8 text-[var(--muted)]">
-          No classes yet. Create one below, then import your student roster.
+          {user && canCreateClass(user.role)
+            ? "No classes yet. Create one below, then import your student roster."
+            : "No classes yet. Ask your school admin to create a class and assign you."}
         </p>
       )}
 
-      {schoolsQuery.isSuccess && schools.length > 0 && (
+      {user &&
+        canCreateClass(user.role) &&
+        schoolsQuery.isSuccess &&
+        schools.length > 0 && (
         <div className="mt-8">
           {!showForm ? (
             <button

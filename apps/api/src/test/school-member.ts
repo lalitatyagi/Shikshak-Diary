@@ -42,6 +42,51 @@ export async function deleteUsersByEmail(emails: string[]): Promise<void> {
   });
 }
 
+/**
+ * Test fixture: a class plus the teacher's subject assignment.
+ * Class creation over HTTP is admin-only.
+ */
+export async function insertClassForUser(input: {
+  email: string;
+  schoolId: string;
+  name: string;
+  academicYear: string;
+  subjectName?: string;
+}): Promise<{ id: string; subjectId: string }> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { email: input.email.toLowerCase() },
+  });
+  const subjectName = input.subjectName?.trim() || "General";
+
+  return prisma.$transaction(async (tx) => {
+    const classroom = await tx.class.create({
+      data: {
+        schoolId: input.schoolId,
+        name: input.name,
+        academicYear: input.academicYear,
+      },
+    });
+
+    const subject = await tx.subject.upsert({
+      where: {
+        schoolId_name: { schoolId: input.schoolId, name: subjectName },
+      },
+      create: { schoolId: input.schoolId, name: subjectName },
+      update: {},
+    });
+
+    await tx.teacherClassSubject.create({
+      data: {
+        teacherId: user.id,
+        classId: classroom.id,
+        subjectId: subject.id,
+      },
+    });
+
+    return { id: classroom.id, subjectId: subject.id };
+  });
+}
+
 /** Test setup: an admin invite, without going through HTTP. */
 export async function grantSchoolMembership(
   email: string,
